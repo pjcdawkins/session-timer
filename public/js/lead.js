@@ -74,9 +74,7 @@ document.getElementById("auth-form").addEventListener("submit", (e) => {
 btnStart.addEventListener("click", () => send({ type: "start" }));
 btnStop.addEventListener("click", () => send({ type: "stop" }));
 document.getElementById("btn-reset").addEventListener("click", () => {
-  if (confirm("Reset timer to 0:00:00?")) {
-    send({ type: "reset" });
-  }
+  send({ type: "reset" });
 });
 
 document.getElementById("btn-set-time").addEventListener("click", () => {
