@@ -463,6 +463,92 @@ body::before {
   box-shadow: 0 0 20px var(--red-glow);
 }
 
+/* Set time controls */
+.set-time {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.set-time.hidden {
+  display: none;
+}
+
+.set-time-label {
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.set-time-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.set-time-inputs input[type="number"] {
+  width: 3.5rem;
+  padding: 0.4rem 0.3rem;
+  background: var(--bg-inset);
+  border: 1px solid var(--clock-rim);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+  -moz-appearance: textfield;
+}
+
+.set-time-inputs input[type="number"]::-webkit-inner-spin-button,
+.set-time-inputs input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+.set-time-inputs input[type="number"]:focus {
+  border-color: var(--amber-dim);
+  box-shadow: 0 0 0 2px var(--amber-glow);
+}
+
+.set-time-inputs span {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.set-time-inputs button {
+  padding: 0.4rem 0.8rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--clock-rim);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-left: 0.3rem;
+  transition: all 0.15s var(--ease-in-out);
+}
+
+.set-time-inputs button:hover {
+  border-color: var(--amber-dim);
+  color: var(--amber);
+  background: rgba(232, 168, 76, 0.06);
+}
+
+.set-time-inputs button:active {
+  transform: scale(0.96);
+}
+
 /* Speed controls */
 .speed-controls {
   display: flex;

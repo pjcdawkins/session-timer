@@ -16,6 +16,10 @@ const speedInput = document.getElementById("speed-input");
 const btnStart = document.getElementById("btn-start");
 const btnStop = document.getElementById("btn-stop");
 const presetButtons = document.querySelectorAll("[data-speed]");
+const setTimeControls = document.getElementById("set-time-controls");
+const timeHours = document.getElementById("time-hours");
+const timeMinutes = document.getElementById("time-minutes");
+const timeSeconds = document.getElementById("time-seconds");
 
 let authenticated = false;
 
@@ -28,6 +32,9 @@ connect({
 
     btnStart.disabled = state.running;
     btnStop.disabled = !state.running;
+
+    // Show/hide set-time controls based on running state
+    setTimeControls.classList.toggle("hidden", state.running);
 
     // Sync speed input and preset highlight
     speedInput.value = state.speed;
@@ -71,6 +78,15 @@ document.getElementById("btn-reset").addEventListener("click", () => {
   if (confirm("Reset timer to 0:00:00?")) {
     send({ type: "reset" });
   }
+});
+
+// Set custom start time
+document.getElementById("btn-set-time").addEventListener("click", () => {
+  const hours = parseInt(timeHours.value, 10) || 0;
+  const minutes = parseInt(timeMinutes.value, 10) || 0;
+  const seconds = parseInt(timeSeconds.value, 10) || 0;
+  const virtualMs = ((hours * 3600) + (minutes * 60) + seconds) * 1000;
+  send({ type: "setTime", virtualMs });
 });
 
 // Speed presets

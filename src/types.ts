@@ -20,7 +20,8 @@ export type ClientMessage =
   | { type: "start" }
   | { type: "stop" }
   | { type: "reset" }
-  | { type: "setSpeed"; speed: number };
+  | { type: "setSpeed"; speed: number }
+  | { type: "setTime"; virtualMs: number };
 
 export type ServerMessage =
   | { type: "state"; state: TimerState }
