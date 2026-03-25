@@ -133,7 +133,7 @@ export class TimerRoom extends DurableObject<Env> {
           return;
         }
         this.state.accumulatedVirtualMs = virtualMs;
-        this.state.accumulatedRealMs = 0;
+        this.state.accumulatedRealMs = virtualMs / this.state.speed;
         await this.persist();
         this.broadcast();
         break;
