@@ -1,0 +1,17 @@
+name = "shared-timer"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/ws"]
+
+[[durable_objects.bindings]]
+name = "TIMER_ROOM"
+class_name = "TimerRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TimerRoom"]

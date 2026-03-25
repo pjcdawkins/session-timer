@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Session Timer — Lead</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="auth-gate">
+    <div class="auth-box">
+      <h2>Session Lead</h2>
+      <form id="auth-form">
+        <input type="password" id="password-input" placeholder="Password" autocomplete="off">
+        <button type="submit">Enter</button>
+      </form>
+      <span id="auth-error" class="hidden">Wrong password</span>
+    </div>
+  </div>
+
+  <div class="app lead-app">
+    <div id="status-bar">
+      <span class="dot" id="connection-dot"></span>
+      <span id="status-text">STOPPED</span>
+    </div>
+
+    <div id="analog-clock"></div>
+
+    <div class="main-display">
+      <div id="digital-clock">00:00:00<span class="tenths">.0</span></div>
+    </div>
+
+    <div id="controls" class="hidden">
+      <div class="transport">
+        <button id="btn-start">Start</button>
+        <button id="btn-stop" disabled>Stop</button>
+        <button id="btn-reset">Reset</button>
+      </div>
+
+      <div class="speed-controls">
+        <span class="speed-controls-label">Playback Speed</span>
+        <div class="speed-presets">
+          <button data-speed="1.00">1.00x</button>
+          <button data-speed="1.05">1.05x</button>
+          <button data-speed="1.10">1.10x</button>
+          <button data-speed="1.15" class="active">1.15x</button>
+          <button data-speed="1.20">1.20x</button>
+        </div>
+        <div class="speed-custom">
+          <input type="number" id="speed-input" min="0.1" max="10" step="0.01" value="1.15">
+          <span>x</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="speed-display">
+      <span id="speed-label">Speed</span>
+      <span id="speed-value">1.15x</span>
+    </div>
+
+    <div id="real-time">
+      <span id="real-time-label">Real elapsed</span>
+      <span id="real-time-value">00:00:00</span>
+    </div>
+  </div>
+
+  <script type="module" src="/js/lead.js"></script>
+</body>
+</html>

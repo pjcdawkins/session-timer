@@ -1,0 +1,640 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wght@400;500;600;700&display=swap');
+
+/* ─── Design Tokens ─── */
+:root {
+  --bg-deep: #050505;
+  --bg-surface: #0c0c0e;
+  --bg-raised: #141416;
+  --bg-inset: #0a0a0b;
+
+  --text-primary: #e8e4df;
+  --text-secondary: #7a756e;
+  --text-muted: #4a4640;
+
+  --amber: #e8a84c;
+  --amber-dim: #b8863c;
+  --amber-glow: rgba(232, 168, 76, 0.15);
+  --amber-glow-strong: rgba(232, 168, 76, 0.35);
+
+  --red: #d94f4f;
+  --red-dim: #8b3535;
+  --red-glow: rgba(217, 79, 79, 0.4);
+
+  --green: #4cad6a;
+  --green-dim: #2d7a44;
+  --green-glow: rgba(76, 173, 106, 0.35);
+
+  --clock-face: #0e0e10;
+  --clock-rim: #2a2824;
+  --clock-tick: #3d3830;
+  --clock-tick-hour: #6b6258;
+  --hand-minute: #d4cfc7;
+  --hand-second: #e86b4c;
+  --hand-second-glow: rgba(232, 107, 76, 0.6);
+
+  --font-mono: 'DM Mono', 'SF Mono', 'Cascadia Mono', monospace;
+  --font-sans: 'Instrument Sans', -apple-system, sans-serif;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Reset & Base ─── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle noise texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ─── App Layout ─── */
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(1rem, 3vw, 2.5rem);
+  gap: clamp(1rem, 3vh, 2rem);
+  position: relative;
+}
+
+/* ─── Status Bar ─── */
+#status-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background: linear-gradient(to bottom, rgba(10, 10, 10, 0.95), transparent);
+  z-index: 100;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red-glow);
+  transition: all 0.4s var(--ease-in-out);
+}
+
+.dot.connected {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green-glow);
+}
+
+#status-text {
+  transition: color 0.3s;
+}
+
+.status.running #status-text {
+  color: var(--amber);
+}
+
+/* ─── Analog Clock ─── */
+#analog-clock {
+  width: clamp(200px, 42vmin, 420px);
+  height: clamp(200px, 42vmin, 420px);
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 40px rgba(0, 0, 0, 0.5));
+}
+
+.analog-clock-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Clock face */
+.clock-face {
+  fill: var(--clock-face);
+  stroke: var(--clock-rim);
+  stroke-width: 1.5;
+  /* subtle inner glow via box-shadow is handled by the container */
+}
+
+/* Tick marks */
+.tick-minute {
+  stroke: var(--clock-tick);
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+
+.tick-hour {
+  stroke: var(--clock-tick-hour);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+/* Clock hands */
+.hand-minute {
+  stroke: var(--hand-minute);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 2px rgba(212, 207, 199, 0.3));
+}
+
+.hand-second {
+  stroke: var(--hand-second);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px var(--hand-second-glow));
+}
+
+.center-dot {
+  fill: var(--hand-second);
+  filter: drop-shadow(0 0 3px var(--hand-second-glow));
+}
+
+/* ─── Digital Clock ─── */
+#digital-clock {
+  font-family: var(--font-mono);
+  font-weight: 300;
+  font-size: clamp(2.8rem, 11vw, 7rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  text-shadow:
+    0 0 30px var(--amber-glow),
+    0 0 60px rgba(232, 168, 76, 0.05);
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#digital-clock .tenths {
+  font-size: 0.45em;
+  color: var(--text-secondary);
+  font-weight: 400;
+  vertical-align: baseline;
+  margin-left: -0.05em;
+}
+
+/* ─── Real Time Corner Display ─── */
+#real-time {
+  position: fixed;
+  bottom: clamp(0.8rem, 2vw, 1.5rem);
+  right: clamp(0.8rem, 2vw, 1.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  z-index: 50;
+}
+
+#real-time-label {
+  font-family: var(--font-sans);
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+#real-time-value {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: clamp(0.85rem, 2vw, 1.1rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  letter-spacing: 0.03em;
+}
+
+/* ─── Speed Badge ─── */
+#speed-display {
+  position: fixed;
+  bottom: clamp(0.8rem, 2vw, 1.5rem);
+  left: clamp(0.8rem, 2vw, 1.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  z-index: 50;
+}
+
+#speed-label {
+  font-family: var(--font-sans);
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+#speed-value {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: clamp(0.85rem, 2vw, 1.1rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--amber-dim);
+  letter-spacing: 0.03em;
+}
+
+/* ─── Lead Page: Auth Gate ─── */
+#auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 5, 5, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: fadeIn 0.4s var(--ease-out-expo);
+}
+
+#auth-gate.hidden {
+  display: none;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.auth-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2.5rem;
+  max-width: 320px;
+  width: 100%;
+}
+
+#auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  width: 100%;
+}
+
+.auth-box h2 {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.auth-box input[type="password"] {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  background: var(--bg-inset);
+  border: 1px solid var(--clock-rim);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  text-align: center;
+  letter-spacing: 0.15em;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.auth-box input[type="password"]:focus {
+  border-color: var(--amber-dim);
+  box-shadow: 0 0 0 3px var(--amber-glow);
+}
+
+.auth-box input[type="password"]::placeholder {
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.auth-box button {
+  width: 100%;
+  padding: 0.7rem 1.5rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--clock-rim);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-in-out);
+}
+
+.auth-box button:hover {
+  background: var(--amber-dim);
+  border-color: var(--amber);
+  color: var(--bg-deep);
+}
+
+.auth-box button:active {
+  transform: scale(0.97);
+}
+
+#auth-error {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  color: var(--red);
+  min-height: 1em;
+}
+
+#auth-error.hidden {
+  visibility: hidden;
+}
+
+/* ─── Lead Page: Controls ─── */
+#controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.8rem, 2vh, 1.2rem);
+  width: 100%;
+  max-width: 480px;
+}
+
+#controls.hidden {
+  display: none;
+}
+
+/* Transport buttons (start/stop/reset) */
+.transport {
+  display: flex;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.transport button {
+  flex: 1;
+  padding: clamp(0.7rem, 1.5vh, 1rem) 0.5rem;
+  border: 1px solid;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-in-out);
+  position: relative;
+  overflow: hidden;
+}
+
+.transport button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.transport button:active {
+  transform: scale(0.96);
+}
+
+.transport button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
+}
+
+#btn-start {
+  background: rgba(76, 173, 106, 0.08);
+  border-color: var(--green-dim);
+  color: var(--green);
+}
+
+#btn-start:hover:not(:disabled) {
+  background: rgba(76, 173, 106, 0.18);
+  box-shadow: 0 0 20px var(--green-glow);
+}
+
+#btn-stop {
+  background: rgba(232, 168, 76, 0.08);
+  border-color: var(--amber-dim);
+  color: var(--amber);
+}
+
+#btn-stop:hover:not(:disabled) {
+  background: rgba(232, 168, 76, 0.18);
+  box-shadow: 0 0 20px var(--amber-glow);
+}
+
+#btn-reset {
+  background: rgba(217, 79, 79, 0.08);
+  border-color: var(--red-dim);
+  color: var(--red);
+}
+
+#btn-reset:hover:not(:disabled) {
+  background: rgba(217, 79, 79, 0.18);
+  box-shadow: 0 0 20px var(--red-glow);
+}
+
+/* Speed controls */
+.speed-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.speed-controls-label {
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.speed-presets {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.speed-presets button {
+  padding: 0.45rem 0.7rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--clock-rim);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-in-out);
+}
+
+.speed-presets button:hover {
+  border-color: var(--amber-dim);
+  color: var(--amber);
+  background: rgba(232, 168, 76, 0.06);
+}
+
+.speed-presets button.active {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: rgba(232, 168, 76, 0.12);
+  box-shadow: 0 0 12px var(--amber-glow);
+}
+
+.speed-custom {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.speed-custom input[type="number"] {
+  width: 5.5rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg-inset);
+  border: 1px solid var(--clock-rim);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+  -moz-appearance: textfield;
+}
+
+.speed-custom input[type="number"]::-webkit-inner-spin-button,
+.speed-custom input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+.speed-custom input[type="number"]:focus {
+  border-color: var(--amber-dim);
+  box-shadow: 0 0 0 2px var(--amber-glow);
+}
+
+.speed-custom span {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ─── Responsive Adjustments ─── */
+
+/* Small phones */
+@media (max-height: 600px) {
+  #analog-clock {
+    width: clamp(140px, 30vmin, 240px);
+    height: clamp(140px, 30vmin, 240px);
+  }
+
+  .app {
+    gap: 0.6rem;
+  }
+}
+
+/* Landscape phones */
+@media (max-height: 500px) and (orientation: landscape) {
+  .app {
+    flex-direction: row;
+    gap: clamp(1rem, 4vw, 2rem);
+  }
+
+  #analog-clock {
+    width: clamp(160px, 40vh, 280px);
+    height: clamp(160px, 40vh, 280px);
+  }
+
+  .main-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+}
+
+/* Large screens */
+@media (min-width: 1200px) and (min-height: 800px) {
+  #analog-clock {
+    width: min(50vmin, 500px);
+    height: min(50vmin, 500px);
+  }
+
+  #digital-clock {
+    font-size: 7.5rem;
+  }
+}
+
+/* Lead page with controls needs tighter spacing */
+.app.lead-app {
+  justify-content: flex-start;
+  padding-top: clamp(2.5rem, 5vh, 4rem);
+  gap: clamp(0.6rem, 2vh, 1.5rem);
+}
+
+.app.lead-app #analog-clock {
+  width: clamp(150px, 28vmin, 320px);
+  height: clamp(150px, 28vmin, 320px);
+}
+
+.app.lead-app #digital-clock {
+  font-size: clamp(2rem, 8vw, 5rem);
+}
+
+/* ─── Utility ─── */
+.hidden {
+  display: none !important;
+}
+
+/* Selection color */
+::selection {
+  background: var(--amber-dim);
+  color: var(--bg-deep);
+}
+
+/* Scrollbar (if ever needed) */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-deep);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--clock-rim);
+  border-radius: 3px;
+}
