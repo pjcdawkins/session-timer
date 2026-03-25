@@ -33,7 +33,6 @@ connect({
     btnStart.disabled = state.running;
     btnStop.disabled = !state.running;
 
-    // Show/hide set-time controls based on running state
     setTimeControls.classList.toggle("hidden", state.running);
 
     // Sync speed input and preset highlight
@@ -80,7 +79,6 @@ document.getElementById("btn-reset").addEventListener("click", () => {
   }
 });
 
-// Set custom start time
 document.getElementById("btn-set-time").addEventListener("click", () => {
   const hours = parseInt(timeHours.value, 10) || 0;
   const minutes = parseInt(timeMinutes.value, 10) || 0;

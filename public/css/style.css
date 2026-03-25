@@ -472,10 +472,6 @@ body::before {
   width: 100%;
 }
 
-.set-time.hidden {
-  display: none;
-}
-
 .set-time-label {
   font-family: var(--font-sans);
   font-size: 0.6rem;
