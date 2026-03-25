@@ -121,6 +121,23 @@ export class TimerRoom extends DurableObject<Env> {
         this.broadcast();
         break;
       }
+
+      case "setTime": {
+        if (this.state.running) {
+          ws.send(JSON.stringify({ type: "error", message: "Stop the timer before setting time" }));
+          return;
+        }
+        const virtualMs = msg.virtualMs;
+        if (typeof virtualMs !== "number" || !Number.isFinite(virtualMs) || virtualMs < 0) {
+          ws.send(JSON.stringify({ type: "error", message: "Time must be a non-negative number" }));
+          return;
+        }
+        this.state.accumulatedVirtualMs = virtualMs;
+        this.state.accumulatedRealMs = 0;
+        await this.persist();
+        this.broadcast();
+        break;
+      }
     }
   }
 
