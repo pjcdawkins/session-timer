@@ -80,9 +80,9 @@ document.getElementById("btn-reset").addEventListener("click", () => {
 });
 
 document.getElementById("btn-set-time").addEventListener("click", () => {
-  const hours = parseInt(timeHours.value, 10) || 0;
-  const minutes = parseInt(timeMinutes.value, 10) || 0;
-  const seconds = parseInt(timeSeconds.value, 10) || 0;
+  const hours = Math.max(0, parseInt(timeHours.value, 10) || 0);
+  const minutes = Math.max(0, Math.min(59, parseInt(timeMinutes.value, 10) || 0));
+  const seconds = Math.max(0, Math.min(59, parseInt(timeSeconds.value, 10) || 0));
   const virtualMs = ((hours * 3600) + (minutes * 60) + seconds) * 1000;
   send({ type: "setTime", virtualMs });
 });

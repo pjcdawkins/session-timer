@@ -128,7 +128,7 @@ export class TimerRoom extends DurableObject<Env> {
           return;
         }
         const virtualMs = msg.virtualMs;
-        if (typeof virtualMs !== "number" || virtualMs < 0) {
+        if (typeof virtualMs !== "number" || !Number.isFinite(virtualMs) || virtualMs < 0) {
           ws.send(JSON.stringify({ type: "error", message: "Time must be a non-negative number" }));
           return;
         }
