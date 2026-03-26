@@ -128,8 +128,8 @@ export class TimerRoom extends DurableObject<Env> {
           return;
         }
         const virtualMs = msg.virtualMs;
-        if (typeof virtualMs !== "number" || !Number.isFinite(virtualMs) || virtualMs < 0) {
-          ws.send(JSON.stringify({ type: "error", message: "Time must be a non-negative number" }));
+        if (typeof virtualMs !== "number" || !Number.isFinite(virtualMs)) {
+          ws.send(JSON.stringify({ type: "error", message: "Time must be a finite number" }));
           return;
         }
         this.state.accumulatedVirtualMs = virtualMs;
