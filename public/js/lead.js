@@ -23,6 +23,10 @@ const setTimeControls = document.getElementById("set-time-controls");
 const timeMinutes = document.getElementById("time-minutes");
 const timeSeconds = document.getElementById("time-seconds");
 
+const highlightEnabled = document.getElementById("highlight-enabled");
+const highlightInterval = document.getElementById("highlight-interval");
+const highlightOffset = document.getElementById("highlight-offset");
+
 const btnQr = document.getElementById("btn-qr");
 const qrModal = document.getElementById("qr-modal");
 const qrSvgContainer = document.getElementById("qr-svg-container");
@@ -71,6 +75,13 @@ connect({
     presetButtons.forEach((btn) => {
       btn.classList.toggle("active", parseFloat(btn.dataset.speed) === state.speed);
     });
+
+    // Sync highlight controls
+    highlightEnabled.checked = !!state.highlight;
+    if (state.highlight) {
+      highlightInterval.value = state.highlight.interval;
+      highlightOffset.value = state.highlight.offset;
+    }
   },
   onAuth: (success) => {
     if (success) {
@@ -138,6 +149,20 @@ speedInput.addEventListener("change", () => {
     send({ type: "setSpeed", speed });
   }
 });
+
+// Highlight controls
+function sendHighlight() {
+  if (highlightEnabled.checked) {
+    const interval = Math.max(1, Math.min(60, parseInt(highlightInterval.value, 10) || 10));
+    const offset = Math.max(0, Math.min(59, parseInt(highlightOffset.value, 10) || 0));
+    send({ type: "setHighlight", highlight: { interval, offset } });
+  } else {
+    send({ type: "setHighlight", highlight: null });
+  }
+}
+highlightEnabled.addEventListener("change", sendHighlight);
+highlightInterval.addEventListener("change", sendHighlight);
+highlightOffset.addEventListener("change", sendHighlight);
 
 // QR modal
 btnQr.addEventListener("click", () => qrModal.classList.remove("hidden"));

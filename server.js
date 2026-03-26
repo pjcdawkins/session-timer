@@ -24,6 +24,7 @@ let state = {
   speed: 1.15,
   accumulatedVirtualMs: 0,
   startRealTimestamp: null,
+  highlight: null,
 };
 
 function accumulate() {
@@ -190,6 +191,23 @@ wss.on("connection", (ws) => {
           return;
         }
         state.accumulatedVirtualMs = virtualMs;
+        broadcast();
+        break;
+      }
+
+      case "setHighlight": {
+        const hl = msg.highlight;
+        if (hl != null) {
+          if (typeof hl.interval !== "number" || hl.interval < 1 || hl.interval > 60) {
+            ws.send(JSON.stringify({ type: "error", message: "Interval must be between 1 and 60" }));
+            return;
+          }
+          if (typeof hl.offset !== "number" || hl.offset < 0 || hl.offset > 59) {
+            ws.send(JSON.stringify({ type: "error", message: "Offset must be between 0 and 59" }));
+            return;
+          }
+        }
+        state.highlight = hl ?? null;
         broadcast();
         break;
       }

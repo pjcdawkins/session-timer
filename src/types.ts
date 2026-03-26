@@ -12,6 +12,7 @@ export interface TimerState {
   accumulatedVirtualMs: number;
   startRealTimestamp: number | null;
   serverNow: number;
+  highlight: { interval: number; offset: number } | null;
 }
 
 export type ClientMessage =
@@ -20,7 +21,8 @@ export type ClientMessage =
   | { type: "stop" }
   | { type: "reset" }
   | { type: "setSpeed"; speed: number }
-  | { type: "setTime"; virtualMs: number };
+  | { type: "setTime"; virtualMs: number }
+  | { type: "setHighlight"; highlight: { interval: number; offset: number } | null };
 
 export type ServerMessage =
   | { type: "state"; state: TimerState }

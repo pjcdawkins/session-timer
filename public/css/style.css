@@ -160,6 +160,13 @@ body::before {
   stroke-linecap: round;
 }
 
+.tick-highlight {
+  stroke: var(--amber) !important;
+  stroke-width: 2.2 !important;
+  filter: drop-shadow(0 0 3px var(--amber-glow-strong)) drop-shadow(0 0 6px var(--amber-glow));
+  transition: stroke 0.15s, stroke-width 0.15s, filter 0.15s;
+}
+
 /* Clock hands */
 .hand-minute {
   stroke: var(--hand-minute);
@@ -637,6 +644,84 @@ body::before {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+/* ─── Highlight Controls ─── */
+.highlight-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.highlight-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.highlight-toggle input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--bg-inset);
+  border: 1px solid var(--clock-rim);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.15s var(--ease-in-out);
+}
+
+.highlight-toggle input[type="checkbox"]:checked {
+  background: var(--amber-dim);
+  border-color: var(--amber);
+}
+
+.highlight-toggle input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--bg-deep);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.highlight-input {
+  width: 3rem;
+  padding: 0.25rem 0.2rem;
+  background: var(--bg-inset);
+  border: 1px solid var(--clock-rim);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+  -moz-appearance: textfield;
+}
+
+.highlight-input::-webkit-inner-spin-button,
+.highlight-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+.highlight-input:focus {
+  border-color: var(--amber-dim);
+  box-shadow: 0 0 0 2px var(--amber-glow);
 }
 
 /* ─── QR Modal ─── */

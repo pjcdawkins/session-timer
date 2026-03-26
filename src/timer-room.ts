@@ -6,6 +6,7 @@ interface InternalState {
   speed: number;
   accumulatedVirtualMs: number;
   startRealTimestamp: number | null;
+  highlight: { interval: number; offset: number } | null;
 }
 
 const DEFAULT_STATE: InternalState = {
@@ -13,6 +14,7 @@ const DEFAULT_STATE: InternalState = {
   speed: 1.15,
   accumulatedVirtualMs: 0,
   startRealTimestamp: null,
+  highlight: null,
 };
 
 export class TimerRoom extends DurableObject<Env> {
@@ -25,6 +27,7 @@ export class TimerRoom extends DurableObject<Env> {
       const stored = await this.ctx.storage.get<InternalState>("timerState");
       if (stored) {
         this.state = stored;
+        this.state.highlight = this.state.highlight ?? null;
       }
       this.ctx.setWebSocketAutoResponse(
         new WebSocketRequestResponsePair("ping", "pong")
@@ -134,6 +137,24 @@ export class TimerRoom extends DurableObject<Env> {
         this.broadcast();
         break;
       }
+
+      case "setHighlight": {
+        const hl = msg.highlight;
+        if (hl !== null) {
+          if (typeof hl.interval !== "number" || hl.interval < 1 || hl.interval > 60) {
+            ws.send(JSON.stringify({ type: "error", message: "Interval must be between 1 and 60" }));
+            return;
+          }
+          if (typeof hl.offset !== "number" || hl.offset < 0 || hl.offset > 59) {
+            ws.send(JSON.stringify({ type: "error", message: "Offset must be between 0 and 59" }));
+            return;
+          }
+        }
+        this.state.highlight = hl;
+        await this.persist();
+        this.broadcast();
+        break;
+      }
     }
   }
 
@@ -164,6 +185,7 @@ export class TimerRoom extends DurableObject<Env> {
       accumulatedVirtualMs: this.state.accumulatedVirtualMs,
       startRealTimestamp: this.state.startRealTimestamp,
       serverNow: Date.now(),
+      highlight: this.state.highlight,
     };
   }
 

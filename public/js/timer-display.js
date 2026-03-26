@@ -3,9 +3,23 @@ let secondHand = null;
 let minuteHand = null;
 let digitalEl = null;
 let realTimeEl = null;
+let ticks = [];
+let lastHighlight = undefined;
 
 export function updateState(state) {
   currentState = state;
+  const hl = state?.highlight;
+  if (hl !== lastHighlight && JSON.stringify(hl) !== JSON.stringify(lastHighlight)) {
+    lastHighlight = hl;
+    applyHighlight(hl);
+  }
+}
+
+function applyHighlight(hl) {
+  for (let i = 0; i < ticks.length; i++) {
+    const matches = hl && ((i - hl.offset) % hl.interval + hl.interval) % hl.interval === 0;
+    ticks[i].classList.toggle("tick-highlight", !!matches);
+  }
 }
 
 export function getElapsedMs() {
@@ -69,6 +83,7 @@ export function initAnalogClock(container) {
     line.setAttribute("y2", String(100 + outerR * Math.sin(rad)));
     line.setAttribute("class", isHour ? "tick-hour" : "tick-minute");
     svg.appendChild(line);
+    ticks.push(line);
   }
 
   // Minute hand

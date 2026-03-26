@@ -71,6 +71,16 @@
         </div>
       </div>
 
+      <div class="highlight-controls">
+        <label class="highlight-toggle">
+          <input type="checkbox" id="highlight-enabled">
+          <span>Highlight every</span>
+          <input type="number" id="highlight-interval" min="1" max="60" value="10" class="highlight-input">
+          <span>sec offset</span>
+          <input type="number" id="highlight-offset" min="0" max="59" value="0" class="highlight-input">
+        </label>
+      </div>
+
       <button id="btn-qr" class="hidden">Share QR Code</button>
     </div>
 
