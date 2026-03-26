@@ -4,6 +4,11 @@ let onAuthResult = null;
 let onConnectionChange = null;
 let reconnectDelay = 1000;
 let reconnectTimer = null;
+let failedAttempts = 0;
+
+// Connection status: "connected", "reconnecting", or "disconnected"
+// "reconnecting" = transient, will retry soon
+// "disconnected" = multiple retries failed, still retrying but user may need to act
 
 export function connect({ onState, onAuth, onConnection }) {
   onStateUpdate = onState;
@@ -18,7 +23,8 @@ function doConnect() {
 
   ws.onopen = () => {
     reconnectDelay = 1000;
-    onConnectionChange?.(true);
+    failedAttempts = 0;
+    onConnectionChange?.("connected");
   };
 
   ws.onmessage = (event) => {
@@ -32,7 +38,8 @@ function doConnect() {
   };
 
   ws.onclose = () => {
-    onConnectionChange?.(false);
+    failedAttempts++;
+    onConnectionChange?.(failedAttempts >= 3 ? "disconnected" : "reconnecting");
     scheduleReconnect();
   };
 

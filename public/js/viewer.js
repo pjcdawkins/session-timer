@@ -19,8 +19,15 @@ connect({
     speedValue.textContent = `${state.speed.toFixed(2)}x`;
   },
   onAuth: null,
-  onConnection: (connected) => {
-    connectionDot.className = connected ? "dot connected" : "dot";
+  onConnection: (status) => {
+    connectionDot.className = status === "connected" ? "dot connected" : "dot";
+    if (status === "reconnecting") {
+      statusText.textContent = "RECONNECTING";
+      statusBar.className = "status";
+    } else if (status === "disconnected") {
+      statusText.textContent = "DISCONNECTED";
+      statusBar.className = "status";
+    }
   },
 });
 

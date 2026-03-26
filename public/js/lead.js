@@ -53,9 +53,16 @@ connect({
       passwordInput.focus();
     }
   },
-  onConnection: (connected) => {
-    connectionDot.className = connected ? "dot connected" : "dot";
-    if (connected && authenticated) {
+  onConnection: (status) => {
+    connectionDot.className = status === "connected" ? "dot connected" : "dot";
+    if (status === "reconnecting") {
+      statusText.textContent = "RECONNECTING";
+      statusBar.className = "status";
+    } else if (status === "disconnected") {
+      statusText.textContent = "DISCONNECTED";
+      statusBar.className = "status";
+    }
+    if (status === "connected" && authenticated) {
       send({ type: "auth", password: localStorage.getItem("timer-lead-pw") || "" });
     }
   },
