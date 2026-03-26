@@ -7,6 +7,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
+const QRCode = require("qrcode");
 
 const PORT = Number(process.env.PORT) || 8787;
 const LEAD_PASSWORD = process.env.LEAD_PASSWORD || "session";
@@ -197,24 +198,36 @@ wss.on("connection", (ws) => {
 // Start
 // ---------------------------------------------------------------------------
 
-httpServer.listen(PORT, "0.0.0.0", () => {
+httpServer.listen(PORT, "0.0.0.0", async () => {
   const { networkInterfaces } = require("os");
   const nets = networkInterfaces();
+
+  // Collect non-loopback IPv4 addresses
+  const networkUrls = [];
+  for (const ifaces of Object.values(nets)) {
+    for (const iface of ifaces) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        networkUrls.push(`http://${iface.address}:${PORT}`);
+      }
+    }
+  }
 
   console.log("\nSession Timer (local network mode)");
   console.log("===================================");
   console.log(`  Local:    http://localhost:${PORT}`);
   console.log(`  Local:    http://localhost:${PORT}/lead  (lead controls)`);
-
-  for (const ifaces of Object.values(nets)) {
-    for (const iface of ifaces) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        console.log(`  Network:  http://${iface.address}:${PORT}  ← share with the room`);
-        console.log(`  Network:  http://${iface.address}:${PORT}/lead  (lead controls)`);
-      }
-    }
+  for (const url of networkUrls) {
+    console.log(`  Network:  ${url}  ← viewer`);
+    console.log(`  Network:  ${url}/lead  ← lead controls`);
   }
-
   console.log(`\n  Lead password: ${LEAD_PASSWORD}`);
-  console.log("  (set a different password via LEAD_PASSWORD env var)\n");
+  console.log("  (set a different password via LEAD_PASSWORD env var)");
+
+  // Print a QR code for the first network address so phones can scan it
+  const viewerUrl = networkUrls[0];
+  if (viewerUrl) {
+    console.log(`\n  Scan to open on phone (${viewerUrl}):\n`);
+    const qr = await QRCode.toString(viewerUrl, { type: "terminal", small: true });
+    console.log(qr);
+  }
 });
