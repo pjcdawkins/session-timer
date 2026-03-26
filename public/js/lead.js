@@ -1,8 +1,10 @@
 import { connect, send } from "./websocket-client.js";
 import { updateState, initAnalogClock, initDisplay, startRenderLoop } from "./timer-display.js";
+import { initWakeLock } from "./wake-lock.js";
 
 initAnalogClock(document.getElementById("analog-clock"));
 initDisplay();
+initWakeLock();
 
 const authGate = document.getElementById("auth-gate");
 const authError = document.getElementById("auth-error");
