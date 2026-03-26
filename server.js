@@ -81,7 +81,7 @@ const httpServer = http.createServer((req, res) => {
 // WebSocket server (mirrors timer-room.ts logic)
 // ---------------------------------------------------------------------------
 
-const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+const wss = new WebSocketServer({ server: httpServer, path: "/ws", perMessageDeflate: false });
 
 /** @type {Map<import('ws').WebSocket, { authenticated: boolean }>} */
 const clients = new Map();
