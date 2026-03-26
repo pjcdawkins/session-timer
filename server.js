@@ -21,7 +21,6 @@ let state = {
   running: false,
   speed: 1.15,
   accumulatedVirtualMs: 0,
-  accumulatedRealMs: 0,
   startRealTimestamp: null,
 };
 
@@ -29,7 +28,6 @@ function accumulate() {
   if (state.startRealTimestamp === null) return;
   const now = Date.now();
   const realElapsed = now - state.startRealTimestamp;
-  state.accumulatedRealMs += realElapsed;
   state.accumulatedVirtualMs += realElapsed * state.speed;
 }
 
@@ -152,7 +150,6 @@ wss.on("connection", (ws) => {
       case "reset":
         state.running = false;
         state.accumulatedVirtualMs = 0;
-        state.accumulatedRealMs = 0;
         state.startRealTimestamp = null;
         broadcast();
         break;
@@ -183,7 +180,6 @@ wss.on("connection", (ws) => {
           return;
         }
         state.accumulatedVirtualMs = virtualMs;
-        state.accumulatedRealMs = virtualMs / state.speed;
         broadcast();
         break;
       }

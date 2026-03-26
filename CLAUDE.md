@@ -33,10 +33,10 @@ Shared timer web app for music sessions. One "lead" controls the timer; all othe
 
 State is **not** continuously pushed. The server broadcasts a state snapshot on changes and periodically; clients compute display locally at 60fps.
 
-Timer state: `{ running, speed, accumulatedVirtualMs, accumulatedRealMs, startRealTimestamp }`. When running, clients compute:
+Timer state: `{ running, speed, accumulatedVirtualMs, startRealTimestamp }`. When running, clients compute:
 ```
 virtualElapsed = accumulatedVirtualMs + (now - startRealTimestamp) * speed
-realElapsed    = accumulatedRealMs    + (now - startRealTimestamp)
+realElapsed    = virtualElapsed / speed
 ```
 
 Each broadcast includes `serverNow` so clients calculate `clockOffset = serverNow - Date.now()` for cross-device alignment.

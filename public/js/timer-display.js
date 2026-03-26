@@ -12,16 +12,14 @@ export function getElapsedMs() {
   if (!currentState) return { virtual: 0, real: 0 };
 
   let virtualMs = currentState.accumulatedVirtualMs;
-  let realMs = currentState.accumulatedRealMs;
 
   if (currentState.running && currentState.startRealTimestamp) {
     const now = Date.now() + (currentState.clockOffset || 0);
     const elapsed = Math.max(0, now - currentState.startRealTimestamp);
     virtualMs += elapsed * currentState.speed;
-    realMs += elapsed;
   }
 
-  return { virtual: virtualMs, real: realMs };
+  return { virtual: virtualMs, real: virtualMs / currentState.speed };
 }
 
 function formatTime(ms) {

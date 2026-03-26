@@ -10,7 +10,6 @@ export interface TimerState {
   running: boolean;
   speed: number;
   accumulatedVirtualMs: number;
-  accumulatedRealMs: number;
   startRealTimestamp: number | null;
   serverNow: number;
 }

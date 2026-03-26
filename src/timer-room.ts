@@ -5,7 +5,6 @@ interface InternalState {
   running: boolean;
   speed: number;
   accumulatedVirtualMs: number;
-  accumulatedRealMs: number;
   startRealTimestamp: number | null;
 }
 
@@ -13,7 +12,6 @@ const DEFAULT_STATE: InternalState = {
   running: false,
   speed: 1.15,
   accumulatedVirtualMs: 0,
-  accumulatedRealMs: 0,
   startRealTimestamp: null,
 };
 
@@ -99,7 +97,6 @@ export class TimerRoom extends DurableObject<Env> {
       case "reset":
         this.state.running = false;
         this.state.accumulatedVirtualMs = 0;
-        this.state.accumulatedRealMs = 0;
         this.state.startRealTimestamp = null;
         await this.persist();
         this.broadcast();
@@ -133,7 +130,6 @@ export class TimerRoom extends DurableObject<Env> {
           return;
         }
         this.state.accumulatedVirtualMs = virtualMs;
-        this.state.accumulatedRealMs = virtualMs / this.state.speed;
         await this.persist();
         this.broadcast();
         break;
@@ -158,7 +154,6 @@ export class TimerRoom extends DurableObject<Env> {
     if (this.state.startRealTimestamp === null) return;
     const now = Date.now();
     const realElapsed = now - this.state.startRealTimestamp;
-    this.state.accumulatedRealMs += realElapsed;
     this.state.accumulatedVirtualMs += realElapsed * this.state.speed;
   }
 
@@ -167,7 +162,6 @@ export class TimerRoom extends DurableObject<Env> {
       running: this.state.running,
       speed: this.state.speed,
       accumulatedVirtualMs: this.state.accumulatedVirtualMs,
-      accumulatedRealMs: this.state.accumulatedRealMs,
       startRealTimestamp: this.state.startRealTimestamp,
       serverNow: Date.now(),
     };
