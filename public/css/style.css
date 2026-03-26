@@ -639,6 +639,108 @@ body::before {
   color: var(--text-muted);
 }
 
+/* ─── QR Modal ─── */
+#qr-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 5, 5, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: fadeIn 0.4s var(--ease-out-expo);
+}
+
+#qr-modal.hidden {
+  display: none;
+}
+
+.qr-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 2.5rem;
+  max-width: 360px;
+  width: 100%;
+}
+
+.qr-box h2 {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+#qr-svg-container svg {
+  width: min(280px, 70vw);
+  height: auto;
+  border-radius: 8px;
+}
+
+#qr-url-text {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--amber-dim);
+  letter-spacing: 0.03em;
+}
+
+.qr-box button {
+  width: 100%;
+  padding: 0.7rem 1.5rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--clock-rim);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-in-out);
+}
+
+.qr-box button:hover {
+  background: var(--amber-dim);
+  border-color: var(--amber);
+  color: var(--bg-deep);
+}
+
+.qr-box button:active {
+  transform: scale(0.97);
+}
+
+#btn-qr {
+  width: 100%;
+  padding: 0.6rem 1.2rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--clock-rim);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-in-out);
+}
+
+#btn-qr:hover {
+  border-color: var(--amber-dim);
+  color: var(--amber);
+  background: rgba(232, 168, 76, 0.06);
+}
+
+#btn-qr:active {
+  transform: scale(0.97);
+}
+
 /* ─── Responsive Adjustments ─── */
 
 /* Small phones */

@@ -1,6 +1,7 @@
 import { connect, send } from "./websocket-client.js";
 import { updateState, initAnalogClock, initDisplay, startRenderLoop } from "./timer-display.js";
 import { initWakeLock } from "./wake-lock.js";
+import { renderSVG } from "./vendor/uqr.js";
 
 initAnalogClock(document.getElementById("analog-clock"));
 initDisplay();
@@ -22,7 +23,36 @@ const setTimeControls = document.getElementById("set-time-controls");
 const timeMinutes = document.getElementById("time-minutes");
 const timeSeconds = document.getElementById("time-seconds");
 
+const btnQr = document.getElementById("btn-qr");
+const qrModal = document.getElementById("qr-modal");
+const qrSvgContainer = document.getElementById("qr-svg-container");
+const qrUrlText = document.getElementById("qr-url-text");
+const qrClose = document.getElementById("qr-close");
+
 let authenticated = false;
+let qrLoaded = false;
+
+async function loadQr() {
+  if (qrLoaded) return;
+  try {
+    // In local mode, /api/info provides the LAN IP URL (lead may be on localhost)
+    let viewerUrl = window.location.origin;
+    try {
+      const res = await fetch("/api/info");
+      if (res.ok) {
+        const info = await res.json();
+        if (info.viewerUrl) viewerUrl = info.viewerUrl;
+      }
+    } catch { /* Cloudflare mode — use origin */ }
+
+    qrSvgContainer.innerHTML = renderSVG(viewerUrl);
+    qrUrlText.textContent = viewerUrl;
+    btnQr.classList.remove("hidden");
+    qrLoaded = true;
+  } catch {
+    // QR generation failed — leave button hidden
+  }
+}
 
 connect({
   onState: (state) => {
@@ -47,6 +77,7 @@ connect({
       authenticated = true;
       authGate.classList.add("hidden");
       controls.classList.remove("hidden");
+      loadQr();
     } else {
       authError.classList.remove("hidden");
       passwordInput.value = "";
@@ -106,4 +137,11 @@ speedInput.addEventListener("change", () => {
   if (speed >= 0.1 && speed <= 10.0) {
     send({ type: "setSpeed", speed });
   }
+});
+
+// QR modal
+btnQr.addEventListener("click", () => qrModal.classList.remove("hidden"));
+qrClose.addEventListener("click", () => qrModal.classList.add("hidden"));
+qrModal.addEventListener("click", (e) => {
+  if (e.target === qrModal) qrModal.classList.add("hidden");
 });

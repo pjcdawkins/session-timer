@@ -18,6 +18,15 @@
     </div>
   </div>
 
+  <div id="qr-modal" class="hidden">
+    <div class="qr-box">
+      <h2>Scan to Join</h2>
+      <div id="qr-svg-container"></div>
+      <span id="qr-url-text"></span>
+      <button id="qr-close">Close</button>
+    </div>
+  </div>
+
   <div class="app lead-app">
     <div id="status-bar">
       <span class="dot" id="connection-dot"></span>
@@ -61,6 +70,8 @@
           <span>x</span>
         </div>
       </div>
+
+      <button id="btn-qr" class="hidden">Share QR Code</button>
     </div>
 
     <div class="corner-footer">

@@ -7,11 +7,13 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
-const QRCode = require("qrcode");
 
 const PORT = Number(process.env.PORT) || 8787;
 const LEAD_PASSWORD = process.env.LEAD_PASSWORD || "session";
 const PUBLIC_DIR = path.resolve(__dirname, "public");
+
+// Populated at startup — exposed via /api/info for the QR modal
+let networkUrls = [];
 
 // ---------------------------------------------------------------------------
 // Timer state (mirrors timer-room.ts InternalState)
@@ -50,6 +52,14 @@ const MIME = {
 
 const httpServer = http.createServer((req, res) => {
   let urlPath = req.url.split("?")[0]; // strip query string
+
+  // API: expose the LAN viewer URL for the QR code modal
+  if (urlPath === "/api/info") {
+    const viewerUrl = networkUrls[0];
+    res.writeHead(viewerUrl ? 200 : 404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(viewerUrl ? { viewerUrl } : { error: "No network address" }));
+    return;
+  }
 
   // Route /lead → lead.html
   if (urlPath === "/lead" || urlPath === "/lead/") urlPath = "/lead.html";
@@ -194,12 +204,11 @@ wss.on("connection", (ws) => {
 // Start
 // ---------------------------------------------------------------------------
 
-httpServer.listen(PORT, "0.0.0.0", async () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   const { networkInterfaces } = require("os");
   const nets = networkInterfaces();
 
   // Collect non-loopback IPv4 addresses
-  const networkUrls = [];
   for (const ifaces of Object.values(nets)) {
     for (const iface of ifaces) {
       if (iface.family === "IPv4" && !iface.internal) {
@@ -217,13 +226,5 @@ httpServer.listen(PORT, "0.0.0.0", async () => {
     console.log(`  Network:  ${url}/lead  ← lead controls`);
   }
   console.log(`\n  Lead password: ${LEAD_PASSWORD}`);
-  console.log("  (set a different password via LEAD_PASSWORD env var)");
-
-  // Print a QR code for the first network address so phones can scan it
-  const viewerUrl = networkUrls[0];
-  if (viewerUrl) {
-    console.log(`\n  Scan to open on phone (${viewerUrl}):\n`);
-    const qr = await QRCode.toString(viewerUrl, { type: "terminal", small: true });
-    console.log(qr);
-  }
+  console.log("  (set a different password via LEAD_PASSWORD env var)\n");
 });

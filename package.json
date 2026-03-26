@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "hono": "^4.7.0",
-    "qrcode": "^1.5.4",
     "ws": "^8.18.0"
   },
   "devDependencies": {
