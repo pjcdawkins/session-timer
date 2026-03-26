@@ -25,13 +25,16 @@ export function getElapsedMs() {
 }
 
 function formatTime(ms) {
-  const totalSeconds = Math.floor(ms / 1000);
+  const negative = ms < 0;
+  const absMs = Math.abs(ms);
+  const totalSeconds = Math.floor(absMs / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  const tenths = Math.floor((ms % 1000) / 100);
+  const tenths = Math.floor((absMs % 1000) / 100);
 
   return {
+    negative,
     hh: String(hours).padStart(2, "0"),
     mm: String(minutes).padStart(2, "0"),
     ss: String(seconds).padStart(2, "0"),
@@ -106,16 +109,18 @@ export function initDisplay() {
 
 function renderDigital(virtualMs, realMs) {
   const vt = formatTime(virtualMs);
-  digitalEl.innerHTML = `${vt.hh}:${vt.mm}:${vt.ss}<span class="tenths">.${vt.tenths}</span>`;
+  const vSign = vt.negative ? "-" : "";
+  digitalEl.innerHTML = `${vSign}${vt.hh}:${vt.mm}:${vt.ss}<span class="tenths">.${vt.tenths}</span>`;
 
   const rt = formatTime(realMs);
-  realTimeEl.textContent = `${rt.hh}:${rt.mm}:${rt.ss}`;
+  const rSign = rt.negative ? "-" : "";
+  realTimeEl.textContent = `${rSign}${rt.hh}:${rt.mm}:${rt.ss}`;
 }
 
 function renderAnalog(virtualMs) {
   const totalSeconds = virtualMs / 1000;
-  const seconds = totalSeconds % 60;
-  const minutes = (totalSeconds / 60) % 60;
+  const seconds = ((totalSeconds % 60) + 60) % 60;
+  const minutes = (((totalSeconds / 60) % 60) + 60) % 60;
 
   const secondDeg = (seconds / 60) * 360;
   const minuteDeg = (minutes / 60) * 360;

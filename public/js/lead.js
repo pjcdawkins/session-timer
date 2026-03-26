@@ -19,7 +19,6 @@ const btnStart = document.getElementById("btn-start");
 const btnStop = document.getElementById("btn-stop");
 const presetButtons = document.querySelectorAll("[data-speed]");
 const setTimeControls = document.getElementById("set-time-controls");
-const timeHours = document.getElementById("time-hours");
 const timeMinutes = document.getElementById("time-minutes");
 const timeSeconds = document.getElementById("time-seconds");
 
@@ -80,10 +79,9 @@ document.getElementById("btn-reset").addEventListener("click", () => {
 });
 
 document.getElementById("btn-set-time").addEventListener("click", () => {
-  const hours = Math.max(0, parseInt(timeHours.value, 10) || 0);
   const minutes = Math.max(0, Math.min(59, parseInt(timeMinutes.value, 10) || 0));
-  const seconds = Math.max(0, Math.min(59, parseInt(timeSeconds.value, 10) || 0));
-  const virtualMs = ((hours * 3600) + (minutes * 60) + seconds) * 1000;
+  const seconds = Math.max(-59, Math.min(59, parseInt(timeSeconds.value, 10) || 0));
+  const virtualMs = ((minutes * 60) + seconds) * 1000;
   send({ type: "setTime", virtualMs });
 });
 
