@@ -2,10 +2,12 @@ import { connect, send } from "./websocket-client.js";
 import { updateState, initAnalogClock, initDisplay, startRenderLoop } from "./timer-display.js";
 import { initWakeLock } from "./wake-lock.js";
 import { renderSVG } from "./vendor/uqr.js";
+import { initFullscreen } from "./fullscreen.js";
 
 initAnalogClock(document.getElementById("analog-clock"));
 initDisplay();
 initWakeLock();
+initFullscreen();
 
 const authGate = document.getElementById("auth-gate");
 const authError = document.getElementById("auth-error");

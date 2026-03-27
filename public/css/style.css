@@ -888,6 +888,35 @@ body::before {
   font-size: clamp(2rem, 8vw, 5rem);
 }
 
+/* ─── Fullscreen Button ─── */
+#btn-fullscreen {
+  position: fixed;
+  top: 0.5rem;
+  right: 0.75rem;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  padding: 0;
+}
+
+#btn-fullscreen:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+#btn-fullscreen svg {
+  display: block;
+}
+
 /* ─── Utility ─── */
 .hidden {
   display: none !important;
