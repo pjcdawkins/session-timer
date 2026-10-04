@@ -23,3 +23,8 @@ jobs:
       - run: npm run typecheck
 
       - run: npm test
+
+      # Bundle the Worker exactly as `wrangler deploy` would, without uploading
+      - run: npm run build
+        env:
+          WRANGLER_SEND_METRICS: "false"

@@ -9,6 +9,7 @@ npm run local        # Local Node.js server (no internet) at http://localhost:87
 npm run show         # Local server for performances: auto-restart loop + caffeinate
 npm run dev          # Cloudflare dev server (Miniflare) at http://localhost:8787
 npm run deploy       # Deploy to Cloudflare Workers
+npm run build        # Bundle the Worker without deploying (wrangler deploy --dry-run)
 npm run typecheck    # TypeScript type check (no emit), including worker tests
 npm run lint         # Biome lint (warnings fail); `npm run lint:fix` applies safe fixes
 npm test             # All tests (Vitest), ~6s
@@ -17,7 +18,7 @@ npx vitest run --project server    # One project: server | frontend | worker
 npx vitest run -t "setSpeed"       # Tests whose name matches
 ```
 
-Before committing, run `npm run lint && npm run typecheck && npm test` — CI runs the same three.
+Before committing, run `npm run lint && npm run typecheck && npm test`. CI runs these plus `npm run build`.
 
 Secrets: `wrangler secret put LEAD_PASSWORD` sets the lead auth password. For Cloudflare dev, use `.dev.vars`. For local mode, set `LEAD_PASSWORD` env var (default: `"session"`).
 
@@ -95,4 +96,4 @@ Biome (`biome.json`), linter only — the formatter is disabled. `public/js/vend
 
 ## Deployment
 
-Custom domain `timer.ligetiquartet.com` configured in `wrangler.toml`. GitHub Actions: `.github/workflows/ci.yml` runs lint, typecheck and tests on pull requests. `.github/workflows/deploy.yml` runs that same CI on push to main and only deploys if it passes, using `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets.
+Custom domain `timer.ligetiquartet.com` configured in `wrangler.toml`. GitHub Actions: `.github/workflows/ci.yml` runs lint, typecheck, tests and a dry-run Worker build on pull requests. `.github/workflows/deploy.yml` runs that same CI on push to main and only deploys if it passes, using `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets.
