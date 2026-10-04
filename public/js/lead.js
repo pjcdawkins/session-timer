@@ -47,6 +47,17 @@ const qrUrlText = document.getElementById("qr-url-text");
 const qrClose = document.getElementById("qr-close");
 
 let authenticated = false;
+// Auth state of the *current* socket: false from (re)connect until authResult
+let sessionAuthed = false;
+// The password of the in-flight auth attempt; null when none is pending.
+// Only one attempt is outstanding at a time, so a delayed (throttled) result
+// always belongs to it.
+let pendingPassword = null;
+
+function sendAuth(password) {
+  if (pendingPassword !== null) return;
+  if (send({ type: "auth", password })) pendingPassword = password;
+}
 let qrLoaded = false;
 let running = false;
 
@@ -100,17 +111,22 @@ connect({
   },
   onClients: renderScreens,
   onAuth: (success, reason) => {
+    if (pendingPassword === null) return; // Stale result from a previous socket
+    const password = pendingPassword;
+    pendingPassword = null;
     if (success) {
       authenticated = true;
+      sessionAuthed = true;
+      localStorage.setItem("timer-lead-pw", password);
       authGate.classList.add("hidden");
       controls.classList.remove("hidden");
       loadQr();
     } else if (reason === "rateLimited" && authenticated) {
       // Re-auth after reconnect was throttled: retry quietly
-      setTimeout(() => send({ type: "auth", password: localStorage.getItem("timer-lead-pw") || "" }), 3000);
+      setTimeout(() => sendAuth(localStorage.getItem("timer-lead-pw") || ""), 3000);
     } else {
       authenticated = false;
-      localStorage.removeItem("timer-lead-pw");
+      if (reason !== "rateLimited") localStorage.removeItem("timer-lead-pw");
       controls.classList.add("hidden");
       authGate.classList.remove("hidden");
       authError.textContent = reason === "rateLimited"
@@ -122,6 +138,9 @@ connect({
     }
   },
   onConnection: (status) => {
+    // Any connection change means a new socket that hasn't authenticated yet
+    sessionAuthed = false;
+    pendingPassword = null;
     screensPanel.classList.toggle("stale", status !== "connected");
     connectionDot.className = status === "connected" ? "dot connected" : "dot";
     if (status === "reconnecting") {
@@ -132,7 +151,7 @@ connect({
       statusBar.className = "status";
     }
     if (status === "connected" && (authenticated || localStorage.getItem("timer-lead-pw"))) {
-      send({ type: "auth", password: localStorage.getItem("timer-lead-pw") || "" });
+      sendAuth(localStorage.getItem("timer-lead-pw") || "");
     }
   },
   clientRole: "lead",
@@ -143,15 +162,14 @@ startRenderLoop();
 // Auth form
 document.getElementById("auth-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  const password = passwordInput.value;
-  localStorage.setItem("timer-lead-pw", password);
-  send({ type: "auth", password });
+  sendAuth(passwordInput.value);
 });
 
-// Commands: warn loudly if the lead itself is offline, rather than silently dropping
+// Commands: warn loudly if the lead itself is offline (or its new socket is
+// still re-authenticating), rather than silently dropping
 let warningTimer = null;
 function command(msg) {
-  if (send(msg)) return;
+  if (sessionAuthed && send(msg)) return;
   commandWarning.classList.remove("hidden");
   clearTimeout(warningTimer);
   warningTimer = setTimeout(() => commandWarning.classList.add("hidden"), 3000);
