@@ -5,11 +5,13 @@ let secondHand = null;
 let minuteHand = null;
 let digitalEl = null;
 let realTimeEl = null;
+let realTimeContainer = null;
 let ticks = [];
 let lastHighlight = undefined;
 
 export function updateState(state) {
   currentState = state;
+  realTimeContainer?.classList.toggle("hidden", state?.speed === 1);
   const hl = state?.highlight;
   if (hl !== lastHighlight && JSON.stringify(hl) !== JSON.stringify(lastHighlight)) {
     lastHighlight = hl;
@@ -119,6 +121,7 @@ export function initAnalogClock(container) {
 export function initDisplay() {
   digitalEl = document.getElementById("digital-clock");
   realTimeEl = document.getElementById("real-time-value");
+  realTimeContainer = document.getElementById("real-time");
 }
 
 function renderDigital(virtualMs, realMs) {
