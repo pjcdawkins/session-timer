@@ -291,8 +291,11 @@ wss.on("connection", (ws) => {
 // Start
 // ---------------------------------------------------------------------------
 
-// Log and keep running rather than dying mid-performance
-process.on("uncaughtException", (err) => console.error("Uncaught exception:", err));
+// Exit on fatal errors so the `npm run show` loop restarts from the persisted state
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+  process.exit(1);
+});
 
 httpServer.on("error", (err) => {
   if (err.code === "EADDRINUSE") {

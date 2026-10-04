@@ -106,7 +106,10 @@ connect({
       controls.classList.remove("hidden");
       loadQr();
     } else {
+      authenticated = false;
       localStorage.removeItem("timer-lead-pw");
+      controls.classList.add("hidden");
+      authGate.classList.remove("hidden");
       authError.classList.remove("hidden");
       passwordInput.value = "";
       passwordInput.focus();
@@ -203,6 +206,7 @@ applyLock();
 
 // Connected screens
 const KNOWN_SCREENS_KEY = "timer-known-screens";
+const LOST_AFTER = 10000;
 let knownScreens = loadKnownScreens(); // id → { name, lastSeenAt }
 
 function loadKnownScreens() {
@@ -238,6 +242,8 @@ function renderScreens(clients) {
     if (!prev || c.lastSeenAgoMs < prev.lastSeenAgoMs) live.set(c.id, c);
   }
   for (const c of live.values()) {
+    // Don't refresh lost sockets, or "Clear lost" would immediately re-add them
+    if (c.lastSeenAgoMs >= LOST_AFTER) continue;
     knownScreens.set(c.id, { name: c.name, lastSeenAt: now - c.lastSeenAgoMs });
   }
   saveKnownScreens();
@@ -246,7 +252,7 @@ function renderScreens(clients) {
     .map(([id, k]) => {
       const c = live.get(id);
       const ago = c ? c.lastSeenAgoMs : now - k.lastSeenAt;
-      const health = c && ago < 5000 ? "ok" : c && ago < 10000 ? "warn" : "lost";
+      const health = c && ago < 5000 ? "ok" : c && ago < LOST_AFTER ? "warn" : "lost";
       const detail =
         health === "ok" ? (c.rtt != null ? `${Math.round(c.rtt)} ms` : "connected") :
         health === "warn" ? `quiet ${formatAgo(ago)}` :
@@ -275,7 +281,7 @@ function renderScreens(clients) {
 document.getElementById("btn-screens-clear").addEventListener("click", () => {
   const now = Date.now();
   for (const [id, k] of knownScreens) {
-    if (now - k.lastSeenAt > 10000) knownScreens.delete(id);
+    if (now - k.lastSeenAt >= LOST_AFTER) knownScreens.delete(id);
   }
   saveKnownScreens();
   renderScreens(lastClients);
