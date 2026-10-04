@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wght@400;500;600;700&display=swap');
+@import url('/fonts/fonts.css');
 
 /* ─── Design Tokens ─── */
 :root {
@@ -940,4 +940,187 @@ body::before {
 ::-webkit-scrollbar-thumb {
   background: var(--clock-rim);
   border-radius: 3px;
+}
+
+/* ─── Performance Safeguards (lead) ─── */
+.app.lead-app {
+  overflow-y: auto;
+}
+
+#command-warning {
+  position: fixed;
+  top: 2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  padding: 0.6rem 1rem;
+  background: var(--red-dim);
+  border: 1px solid var(--red);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: 0 0 24px var(--red-glow);
+}
+
+#btn-reset.confirming {
+  background: var(--red-dim);
+  color: var(--text-primary);
+  box-shadow: 0 0 20px var(--red-glow);
+}
+
+.transport-hints {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-top: -0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+
+.lock-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.lock-toggle input {
+  accent-color: var(--amber);
+}
+
+.lock-toggle:has(input:checked) {
+  color: var(--amber);
+}
+
+fieldset.lockable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.8rem, 2vh, 1.2rem);
+  width: 100%;
+  border: none;
+  min-width: 0;
+}
+
+fieldset.lockable:disabled {
+  opacity: 0.35;
+}
+
+#screens-panel {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--clock-rim);
+  border-radius: 8px;
+  transition: opacity 0.3s;
+}
+
+#screens-panel.stale {
+  opacity: 0.4;
+}
+
+.screens-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.screens-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+#btn-screens-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+#btn-screens-clear:hover {
+  color: var(--text-secondary);
+}
+
+#screens-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.screen {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.screen-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.screen.ok .screen-dot { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+.screen.warn .screen-dot { background: var(--amber); box-shadow: 0 0 6px var(--amber-glow-strong); }
+.screen.lost .screen-dot { background: var(--red); box-shadow: 0 0 6px var(--red-glow); }
+
+.screen-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screen.lost .screen-name { color: var(--red); }
+
+.screen-detail {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.screen.warn .screen-detail { color: var(--amber); }
+.screen.lost .screen-detail { color: var(--red); }
+
+#screens-empty {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Viewer screen name (identifies this device in the lead's screens list) */
+#screen-name {
+  margin-left: 0.6rem;
+  padding: 0.1rem 0.4rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+  cursor: pointer;
+}
+
+#screen-name:hover {
+  border-color: var(--clock-rim);
 }

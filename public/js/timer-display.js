@@ -1,3 +1,5 @@
+import { serverNow } from "./clock.js";
+
 let currentState = null;
 let secondHand = null;
 let minuteHand = null;
@@ -28,8 +30,7 @@ export function getElapsedMs() {
   let virtualMs = currentState.accumulatedVirtualMs;
 
   if (currentState.running && currentState.startRealTimestamp) {
-    const now = Date.now() + (currentState.clockOffset || 0);
-    const elapsed = Math.max(0, now - currentState.startRealTimestamp);
+    const elapsed = Math.max(0, serverNow() - currentState.startRealTimestamp);
     virtualMs += elapsed * currentState.speed;
   }
 
