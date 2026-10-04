@@ -990,7 +990,8 @@ body::before {
   position: fixed;
   top: 0.5rem;
   right: 0.75rem;
-  z-index: 200;
+  /* Above the auth gate and QR modal so these stay usable on those screens */
+  z-index: 1001;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1007,8 +1008,6 @@ body::before {
 
 #btn-theme {
   right: 2.9rem;
-  /* Above the auth gate and QR modal so the theme can be changed there too */
-  z-index: 1001;
 }
 
 #btn-fullscreen:hover,
