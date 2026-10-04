@@ -2,3 +2,5 @@ node_modules/
 dist/
 .wrangler/
 .dev.vars
+.timer-state.json
+.timer-state.json.tmp

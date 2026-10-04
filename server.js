@@ -11,6 +11,9 @@ const { WebSocketServer } = require("ws");
 const PORT = Number(process.env.PORT) || 8787;
 const LEAD_PASSWORD = process.env.LEAD_PASSWORD || "session";
 const PUBLIC_DIR = path.resolve(__dirname, "public");
+const STATE_FILE = process.env.STATE_FILE || path.resolve(__dirname, ".timer-state.json");
+// Sockets silent for longer than this are dropped (clients ping every 2s)
+const CLIENT_TIMEOUT_MS = 15_000;
 
 // Populated at startup — exposed via /api/info for the QR modal
 let networkUrls = [];
@@ -19,13 +22,40 @@ let networkUrls = [];
 // Timer state (mirrors timer-room.ts InternalState)
 // ---------------------------------------------------------------------------
 
+// Default start time is -3s so there's a count-in
+const DEFAULT_START_MS = -3000;
+
 let state = {
   running: false,
-  speed: 1.15,
-  accumulatedVirtualMs: 0,
+  speed: 1.0,
+  accumulatedVirtualMs: DEFAULT_START_MS,
   startRealTimestamp: null,
-  highlight: null,
+  highlight: { interval: 10, offset: 0 },
 };
+
+// Persist state to disk so a crash/restart mid-performance resumes where it was.
+// startRealTimestamp is wall-clock time, so a running timer keeps its place.
+function loadState() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    state = { ...state, ...saved };
+    console.log(`Restored timer state from ${STATE_FILE}${state.running ? " (running)" : ""}`);
+  } catch (err) {
+    if (err.code !== "ENOENT") console.error(`Could not read ${STATE_FILE}:`, err.message);
+  }
+}
+
+function saveState() {
+  try {
+    const tmp = STATE_FILE + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(state));
+    fs.renameSync(tmp, STATE_FILE);
+  } catch (err) {
+    console.error(`Could not write ${STATE_FILE}:`, err.message);
+  }
+}
+
+loadState();
 
 function accumulate() {
   if (state.startRealTimestamp === null) return;
@@ -49,6 +79,9 @@ const MIME = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".json": "application/json",
+  ".webmanifest": "application/manifest+json",
 };
 
 const httpServer = http.createServer((req, res) => {
@@ -81,7 +114,10 @@ const httpServer = http.createServer((req, res) => {
       return;
     }
     const ext = path.extname(resolved).toLowerCase();
-    res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": MIME[ext] || "application/octet-stream",
+      "Cache-Control": "no-cache",
+    });
     res.end(data);
   });
 });
@@ -91,9 +127,21 @@ const httpServer = http.createServer((req, res) => {
 // ---------------------------------------------------------------------------
 
 const wss = new WebSocketServer({ server: httpServer, path: "/ws", perMessageDeflate: false });
+// Server-level errors (e.g. port in use) are re-emitted here; the httpServer handler below deals with them
+wss.on("error", () => {});
 
-/** @type {Map<import('ws').WebSocket, { authenticated: boolean, ip: string }>} */
+/** @type {Map<import('ws').WebSocket, { authenticated: boolean, ip: string, id: string, name: string, role: string, rtt: number | null, lastSeen: number }>} */
 const clients = new Map();
+
+function listClients() {
+  const now = Date.now();
+  const list = [];
+  for (const c of clients.values()) {
+    if (!c.id) continue;
+    list.push({ id: c.id, name: c.name, role: c.role, rtt: c.rtt, lastSeenAgoMs: now - c.lastSeen });
+  }
+  return list;
+}
 
 // Auth throttle (mirrors timer-room.ts): one password check per IP per
 // AUTH_INTERVAL_MS; extra attempts are held, or rejected if the wait would
@@ -117,6 +165,7 @@ function reserveAuthSlot(ip) {
 }
 
 function broadcast() {
+  saveState();
   const msg = JSON.stringify({ type: "state", state: buildTimerState() });
   for (const [ws] of clients) {
     if (ws.readyState === ws.OPEN) {
@@ -128,9 +177,20 @@ function broadcast() {
 // 30-second heartbeat (keeps clients in sync even with no activity)
 setInterval(broadcast, 30_000);
 
+// Drop sockets that have gone silent (e.g. a phone that walked out of Wi-Fi range)
+setInterval(() => {
+  const now = Date.now();
+  for (const [ws, c] of clients) {
+    if (now - c.lastSeen > CLIENT_TIMEOUT_MS) {
+      clients.delete(ws);
+      ws.terminate();
+    }
+  }
+}, 5_000);
+
 wss.on("connection", (ws, req) => {
-  const ip = req.socket.remoteAddress ?? "unknown";
-  clients.set(ws, { authenticated: false, ip });
+  const client = { authenticated: false, ip: req.socket.remoteAddress ?? "unknown", id: "", name: "", role: "viewer", rtt: null, lastSeen: Date.now() };
+  clients.set(ws, client);
 
   // Send current state immediately on connect
   ws.send(JSON.stringify({ type: "state", state: buildTimerState() }));
@@ -144,28 +204,39 @@ wss.on("connection", (ws, req) => {
       return;
     }
 
-    // Application-level ping (Cloudflare WS hibernation compat)
-    if (msg === "ping" || msg.type === "ping") {
-      ws.send("pong");
+    client.lastSeen = Date.now();
+
+    if (msg?.type === "hello") {
+      client.id = String(msg.id).slice(0, 32);
+      client.name = String(msg.name).slice(0, 40);
+      client.role = msg.role === "lead" ? "lead" : "viewer";
       return;
     }
 
-    if (msg.type === "auth") {
-      const wait = reserveAuthSlot(ip);
+    if (msg?.type === "ping") {
+      client.rtt = typeof msg.rtt === "number" ? msg.rtt : null;
+      ws.send(JSON.stringify({ type: "pong", t: msg.t, serverNow: Date.now() }));
+      if (client.authenticated) {
+        ws.send(JSON.stringify({ type: "clients", clients: listClients(), serverNow: Date.now() }));
+      }
+      return;
+    }
+
+    if (msg?.type === "auth") {
+      const wait = reserveAuthSlot(client.ip);
       if (wait === null) {
         ws.send(JSON.stringify({ type: "authResult", success: false, reason: "rateLimited" }));
         return;
       }
       setTimeout(() => {
         if (ws.readyState !== ws.OPEN) return;
-        const success = msg.password === LEAD_PASSWORD;
-        clients.set(ws, { authenticated: success, ip });
-        ws.send(JSON.stringify({ type: "authResult", success }));
+        client.authenticated = msg.password === LEAD_PASSWORD;
+        ws.send(JSON.stringify({ type: "authResult", success: client.authenticated }));
       }, wait);
       return;
     }
 
-    if (!clients.get(ws)?.authenticated) {
+    if (!client.authenticated) {
       ws.send(JSON.stringify({ type: "error", message: "Not authenticated" }));
       return;
     }
@@ -190,7 +261,7 @@ wss.on("connection", (ws, req) => {
 
       case "reset":
         state.running = false;
-        state.accumulatedVirtualMs = 0;
+        state.accumulatedVirtualMs = DEFAULT_START_MS;
         state.startRealTimestamp = null;
         broadcast();
         break;
@@ -251,6 +322,21 @@ wss.on("connection", (ws, req) => {
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
+
+// Exit on fatal errors so the `npm run show` loop restarts from the persisted state
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+  process.exit(1);
+});
+
+httpServer.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`Port ${PORT} is already in use — is another timer server running?`);
+  } else {
+    console.error("Server error:", err);
+  }
+  process.exit(1);
+});
 
 httpServer.listen(PORT, "0.0.0.0", () => {
   const { networkInterfaces } = require("os");

@@ -39,47 +39,68 @@
       <div id="digital-clock">00:00:00<span class="tenths">.0</span></div>
     </div>
 
+    <div id="command-warning" class="hidden" role="alert">Not connected — command not sent</div>
+
     <div id="controls" class="hidden">
       <div class="transport">
-        <button id="btn-start">Start</button>
-        <button id="btn-stop" disabled>Pause</button>
+        <button id="btn-start" title="Space">Start</button>
+        <button id="btn-stop" disabled title="Esc">Pause</button>
         <button id="btn-reset">Reset</button>
       </div>
-
-      <div class="set-time" id="set-time-controls">
-        <span class="set-time-label">Set Start Time</span>
-        <div class="set-time-inputs">
-          <input type="number" id="time-minutes" min="0" max="59" value="0" placeholder="MM" aria-label="Minutes">
-          <span>:</span>
-          <input type="number" id="time-seconds" min="-59" max="59" value="0" placeholder="SS" aria-label="Seconds (negative for countdown)">
-          <button id="btn-set-time" aria-label="Set start time">Set</button>
-        </div>
-      </div>
-
-      <div class="speed-controls">
-        <span class="speed-controls-label">Playback Speed</span>
-        <div class="speed-presets">
-          <button data-speed="1.00">1.00x</button>
-          <button data-speed="1.05">1.05x</button>
-          <button data-speed="1.10">1.10x</button>
-          <button data-speed="1.15" class="active">1.15x</button>
-          <button data-speed="1.20">1.20x</button>
-        </div>
-        <div class="speed-custom">
-          <input type="number" id="speed-input" min="0.1" max="10" step="0.01" value="1.15">
-          <span>x</span>
-        </div>
-      </div>
-
-      <div class="highlight-controls">
-        <label class="highlight-toggle">
-          <input type="checkbox" id="highlight-enabled">
-          <span>Highlight every</span>
-          <input type="number" id="highlight-interval" min="1" max="60" value="10" class="highlight-input">
-          <span>sec offset</span>
-          <input type="number" id="highlight-offset" min="0" max="59" value="0" class="highlight-input">
+      <div class="transport-hints">
+        <span>Space = Start</span>
+        <label class="lock-toggle">
+          <input type="checkbox" id="lock-enabled">
+          <span>Show lock</span>
         </label>
+        <span>Esc = Pause</span>
       </div>
+
+      <div id="screens-panel">
+        <div class="screens-header">
+          <span class="screens-label">Screens</span>
+          <button id="btn-screens-clear" title="Forget screens that are no longer connected">Clear lost</button>
+        </div>
+        <ul id="screens-list"></ul>
+        <span id="screens-empty">No screens connected</span>
+      </div>
+
+      <fieldset id="lockable" class="lockable">
+        <div class="set-time" id="set-time-controls">
+          <span class="set-time-label">Set Start Time</span>
+          <div class="set-time-inputs">
+            <input type="number" id="time-minutes" min="0" max="59" value="0" placeholder="MM" aria-label="Minutes">
+            <span>:</span>
+            <input type="number" id="time-seconds" min="-59" max="59" value="-3" placeholder="SS" aria-label="Seconds (negative for countdown)">
+            <button id="btn-set-time" aria-label="Set start time">Set</button>
+          </div>
+        </div>
+
+        <div class="speed-controls">
+          <span class="speed-controls-label">Playback Speed</span>
+          <div class="speed-presets">
+            <button data-speed="1.00" class="active">1.00x</button>
+            <button data-speed="1.05">1.05x</button>
+            <button data-speed="1.10">1.10x</button>
+            <button data-speed="1.15">1.15x</button>
+            <button data-speed="1.20">1.20x</button>
+          </div>
+          <div class="speed-custom">
+            <input type="number" id="speed-input" min="0.1" max="10" step="0.01" value="1.00">
+            <span>x</span>
+          </div>
+        </div>
+
+        <div class="highlight-controls">
+          <label class="highlight-toggle">
+            <input type="checkbox" id="highlight-enabled" checked>
+            <span>Highlight every</span>
+            <input type="number" id="highlight-interval" min="1" max="60" value="10" class="highlight-input">
+            <span>sec offset</span>
+            <input type="number" id="highlight-offset" min="0" max="59" value="0" class="highlight-input">
+          </label>
+        </div>
+      </fieldset>
 
       <button id="btn-qr" class="hidden">Share QR Code</button>
     </div>
@@ -87,7 +108,7 @@
     <div class="corner-footer">
       <div id="speed-display">
         <span id="speed-label">Speed</span>
-        <span id="speed-value">1.15x</span>
+        <span id="speed-value">1.00x</span>
       </div>
 
       <div id="real-time">
