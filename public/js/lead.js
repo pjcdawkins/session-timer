@@ -41,6 +41,11 @@ const commandWarning = document.getElementById("command-warning");
 const screensPanel = document.getElementById("screens-panel");
 const screensList = document.getElementById("screens-list");
 const screensEmpty = document.getElementById("screens-empty");
+const screensSummary = document.getElementById("screens-summary");
+const screensSummaryText = document.getElementById("screens-summary-text");
+const lockIndicator = document.getElementById("lock-indicator");
+const btnPerform = document.getElementById("btn-perform");
+const btnPerformExit = document.getElementById("btn-perform-exit");
 
 const btnQr = document.getElementById("btn-qr");
 const qrModal = document.getElementById("qr-modal");
@@ -151,6 +156,7 @@ connect({
     sessionAuthed = false;
     authPending = false;
     screensPanel.classList.toggle("stale", status !== "connected");
+    screensSummary.classList.toggle("stale", status !== "connected");
     connectionDot.className = status === "connected" ? "dot connected" : "dot";
     if (status === "reconnecting") {
       statusText.textContent = "RECONNECTING";
@@ -260,6 +266,7 @@ function applyLock(locked) {
   lockEnabled.checked = locked;
   lockable.disabled = locked;
   btnReset.disabled = locked;
+  lockIndicator.classList.toggle("hidden", !locked);
   if (locked) cancelResetConfirm();
 }
 lockEnabled.addEventListener("change", () => {
@@ -350,6 +357,15 @@ function renderScreens(clients) {
     return li;
   }));
   screensEmpty.classList.toggle("hidden", rows.length > 0);
+
+  // Compact version for Perform mode: count, coloured by the worst screen
+  const ok = rows.filter((r) => r.health === "ok").length;
+  const worst = rows.some((r) => r.health === "lost") ? "lost" : rows.some((r) => r.health === "warn") ? "warn" : "ok";
+  screensSummary.className = `perform-only screen ${rows.length ? worst : "none"}`;
+  screensSummary.classList.toggle("stale", screensPanel.classList.contains("stale"));
+  screensSummaryText.textContent =
+    !rows.length ? "No screens" :
+    `${ok === rows.length ? rows.length : `${ok}/${rows.length}`} ${rows.length === 1 ? "screen" : "screens"}`;
 }
 
 document.getElementById("btn-screens-clear").addEventListener("click", () => {
@@ -404,3 +420,23 @@ qrClose.addEventListener("click", () => qrModal.classList.add("hidden"));
 qrModal.addEventListener("click", (e) => {
   if (e.target === qrModal) qrModal.classList.add("hidden");
 });
+
+// Perform mode: hide the controls and show the time as large as possible.
+// A per-screen layout choice, remembered across reloads. Entering it turns on
+// Show lock; leaving it doesn't turn the lock off.
+const PERFORM_KEY = "timer-lead-perform";
+function setPerform(on) {
+  document.body.classList.toggle("perform", on);
+  try {
+    if (on) localStorage.setItem(PERFORM_KEY, "1");
+    else localStorage.removeItem(PERFORM_KEY);
+  } catch { /* ignore */ }
+}
+try { setPerform(localStorage.getItem(PERFORM_KEY) === "1"); } catch { /* ignore */ }
+
+btnPerform.addEventListener("click", () => {
+  if (!lastState?.locked && command({ type: "setLock", locked: true })) applyLock(true);
+  setPerform(true);
+});
+
+btnPerformExit.addEventListener("click", () => setPerform(false));

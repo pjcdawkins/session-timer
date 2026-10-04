@@ -1237,3 +1237,124 @@ fieldset.lockable:disabled {
 #screen-name:hover {
   border-color: var(--clock-rim);
 }
+
+/* ─── Perform Mode (lead) ─── */
+#btn-perform {
+  width: 100%;
+  padding: 0.7rem 1.2rem;
+  background: var(--amber-glow);
+  border: 1px solid var(--amber-dim);
+  border-radius: 8px;
+  color: var(--amber);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-in-out);
+}
+
+#btn-perform:hover {
+  background: var(--amber-glow-strong);
+}
+
+#btn-perform:active {
+  transform: scale(0.97);
+}
+
+body:not(.perform) .perform-only {
+  display: none !important;
+}
+
+#lock-indicator,
+#screens-summary {
+  font-size: inherit;
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--clock-rim);
+}
+
+#lock-indicator {
+  color: var(--amber);
+}
+
+#screens-summary {
+  gap: 0.4rem;
+  transition: opacity 0.3s;
+}
+
+#screens-summary.stale {
+  opacity: 0.4;
+}
+
+#screens-summary.none .screen-dot {
+  background: var(--text-muted);
+}
+
+#screens-summary.warn #screens-summary-text { color: var(--amber); }
+#screens-summary.lost #screens-summary-text { color: var(--red); }
+
+#btn-perform-exit {
+  position: fixed;
+  /* Bottom centre: clear of the status bar and the corner displays */
+  bottom: max(clamp(0.8rem, 2vw, 1.5rem), env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  height: 2rem;
+  padding: 0 0.7rem;
+  background: transparent;
+  border: 1px solid var(--clock-rim);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+#btn-perform-exit:hover {
+  color: var(--text-primary);
+  background: var(--hover-tint);
+}
+
+body.perform #controls {
+  display: none;
+}
+
+body.perform .app.lead-app {
+  justify-content: center;
+  padding-top: 3rem;
+  overflow: hidden;
+}
+
+/* Portrait: clock above, digits as wide as the screen allows.
+   ~6.3em is the width of "-00:00:00.0" in DM Mono. */
+body.perform .app.lead-app #analog-clock {
+  width: min(88vw, 52svh);
+  height: min(88vw, 52svh);
+}
+
+body.perform .app.lead-app #digital-clock {
+  font-size: min(15vw, 14svh);
+}
+
+/* Landscape (sideways phone, laptop): clock and digits side by side */
+@media (orientation: landscape) {
+  body.perform .app.lead-app {
+    flex-direction: row;
+    gap: 4vw;
+    padding-top: 2.5rem;
+  }
+
+  body.perform .app.lead-app #analog-clock {
+    width: min(42vw, 78svh);
+    height: min(42vw, 78svh);
+  }
+
+  body.perform .app.lead-app #digital-clock {
+    font-size: min(7.5vw, 22svh);
+  }
+}
