@@ -125,9 +125,14 @@ export function initDisplay() {
 }
 
 function renderDigital(virtualMs, realMs) {
-  const vt = formatTime(virtualMs);
+  // Tenths are only shown below 1x. Without them, round down to the whole
+  // second (towards -∞) so a count-in reads -3, -2, -1, 0 rather than
+  // lingering on "-00:00:00" for the last second.
+  const showTenths = currentState?.speed < 1;
+  const vt = formatTime(showTenths ? virtualMs : Math.floor(virtualMs / 1000) * 1000);
   const vSign = vt.negative ? "-" : "";
-  digitalEl.innerHTML = `${vSign}${vt.hh}:${vt.mm}:${vt.ss}<span class="tenths">.${vt.tenths}</span>`;
+  const tenths = showTenths ? `<span class="tenths">.${vt.tenths}</span>` : "";
+  digitalEl.innerHTML = `${vSign}${vt.hh}:${vt.mm}:${vt.ss}${tenths}`;
 
   const rt = formatTime(realMs);
   const rSign = rt.negative ? "-" : "";

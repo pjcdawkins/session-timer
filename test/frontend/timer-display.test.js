@@ -77,29 +77,51 @@ describe("digital display", () => {
   it("shows the -3s count-in", () => {
     display.updateState(state());
     render();
-    expect(digital()).toBe("-00:00:03.0");
+    expect(digital()).toBe("-00:00:03");
   });
 
-  it("counts through zero while running", () => {
+  it("counts in -3, -2, -1, 0 at 1x without lingering on -0", () => {
     display.updateState(state({ running: true, startRealTimestamp: NOW }));
+    vi.setSystemTime(NOW + 100);
+    render();
+    expect(digital()).toBe("-00:00:03");
     vi.setSystemTime(NOW + 2500);
     render();
-    expect(digital()).toBe("-00:00:00.5");
+    expect(digital()).toBe("-00:00:01");
     vi.setSystemTime(NOW + 3100);
     render();
-    expect(digital()).toBe("00:00:00.1");
+    expect(digital()).toBe("00:00:00");
   });
 
-  it("formats hours, minutes, seconds and tenths", () => {
+  it("formats hours, minutes and seconds", () => {
     display.updateState(state({ accumulatedVirtualMs: ((1 * 60 + 2) * 60 + 3) * 1000 + 456 }));
     render();
-    expect(digital()).toBe("01:02:03.4");
+    expect(digital()).toBe("01:02:03");
+  });
+
+  it("hides tenths at 1x and above, shows them below 1x", () => {
+    display.updateState(state({ speed: 2, accumulatedVirtualMs: 1500 }));
+    render();
+    expect(digital()).toBe("00:00:01");
+    display.updateState(state({ speed: 0.5, accumulatedVirtualMs: 1500 }));
+    render();
+    expect(digital()).toBe("00:00:01.5");
+  });
+
+  it("counts through zero with tenths below 1x", () => {
+    display.updateState(state({ running: true, speed: 0.5, startRealTimestamp: NOW }));
+    vi.setSystemTime(NOW + 5000);
+    render();
+    expect(digital()).toBe("-00:00:00.5");
+    vi.setSystemTime(NOW + 6200);
+    render();
+    expect(digital()).toBe("00:00:00.1");
   });
 
   it("shows real elapsed time in the corner, scaled by speed", () => {
     display.updateState(state({ speed: 2, accumulatedVirtualMs: 120_000 }));
     render();
-    expect(digital()).toBe("00:02:00.0");
+    expect(digital()).toBe("00:02:00");
     expect(realTime()).toBe("00:01:00");
   });
 
