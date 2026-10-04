@@ -42,17 +42,19 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== location.origin || url.pathname === "/ws") return;
-  event.respondWith(networkFirst(event.request));
+  event.respondWith(networkFirst(event));
 });
 
-async function networkFirst(request) {
+async function networkFirst(event) {
+  const { request } = event;
   const cache = await caches.open(CACHE);
   try {
     const response = await Promise.race([
       fetch(request),
       new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), NETWORK_TIMEOUT)),
     ]);
-    if (response.ok) cache.put(request, response.clone());
+    // Keep the worker alive until the cache write finishes
+    if (response.ok) event.waitUntil(cache.put(request, response.clone()));
     return response;
   } catch (err) {
     const cached = await cache.match(request, { ignoreSearch: true });
