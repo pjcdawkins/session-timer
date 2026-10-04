@@ -133,9 +133,11 @@ describe("messages", () => {
   it("routes authResult and clients messages", () => {
     const ws = connect();
     ws.open();
-    ws.receive({ type: "authResult", success: true });
+    ws.receive({ type: "authResult", success: true, token: "abc" });
+    ws.receive({ type: "authResult", success: false, reason: "rateLimited" });
     ws.receive({ type: "clients", clients: [{ id: "a" }], serverNow: 5 });
-    expect(handlers.onAuth).toHaveBeenCalledWith(true);
+    expect(handlers.onAuth).toHaveBeenNthCalledWith(1, true, undefined, "abc");
+    expect(handlers.onAuth).toHaveBeenNthCalledWith(2, false, "rateLimited", undefined);
     expect(handlers.onClients).toHaveBeenCalledWith([{ id: "a" }], 5);
   });
 

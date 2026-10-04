@@ -85,7 +85,7 @@ Vitest with three projects (`vitest.config.mts`):
 - **`worker`** (`test/worker/`) — runs `src/` inside workerd via `@cloudflare/vitest-pool-workers` (reads `wrangler.toml`; `LEAD_PASSWORD` is `test-password`). Also covers hibernation and the heartbeat alarm.
 - **`frontend`** (`test/frontend/`) — unit tests for `public/js` modules under happy-dom: clock sync, display rendering/highlighting, and the reconnect/liveness logic in `websocket-client.js` (with a fake `WebSocket` and fake timers).
 
-`test/shared/protocol-suite.js` is the WebSocket protocol spec. It takes a `test` extended with a per-test `backend` fixture (`connect`, `restart`, `password`) and runs against **both** backends, so `server.js` and `timer-room.ts` must behave identically — when changing the protocol, update both and add the test there.
+`test/shared/protocol-suite.js` is the WebSocket protocol spec. It takes a `test` extended with a per-test `backend` fixture (`connect`, `restart`, `password`) and runs against **both** backends, so `server.js` and `timer-room.ts` must behave identically — when changing the protocol, update both and add the test there. Password auth is throttled per IP (all test sockets share one), so the suite's `connectLead` uses the password once per test and the reconnect token after that; do the same in new tests rather than sending the password repeatedly.
 
 The server and worker tests bind local ports; in a sandbox that blocks local binding they fail with `listen EPERM`.
 

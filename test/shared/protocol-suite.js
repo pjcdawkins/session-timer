@@ -15,11 +15,18 @@ const DEFAULT_START_MS = -3000;
  *   - `password` is the lead password the server was started with
  */
 export function defineProtocolTests(it) {
-  async function connectLead({ connect, password }) {
-    const c = await connect();
+  // Password checks are throttled per IP, so like the lead page, log in with
+  // the password once per test and use the reconnect token after that.
+  const tokens = new WeakMap();
+
+  async function connectLead(backend) {
+    const c = await backend.connect();
     await c.next("state");
-    c.send({ type: "auth", password });
-    expect(await c.next("authResult")).toEqual({ type: "authResult", success: true });
+    const token = tokens.get(backend);
+    c.send(token ? { type: "auth", token } : { type: "auth", password: backend.password });
+    const result = await c.next("authResult");
+    expect(result).toMatchObject({ type: "authResult", success: true, token: expect.any(String) });
+    tokens.set(backend, result.token);
     return c;
   }
 
@@ -87,10 +94,90 @@ export function defineProtocolTests(it) {
 
     it("a failed re-auth revokes a previously authenticated socket", async ({ backend }) => {
       const c = await connectLead(backend);
-      c.send({ type: "auth", password: "wrong" });
+      c.send({ type: "auth", token: "wrong" });
       await c.next("authResult");
       c.send({ type: "start" });
       expect(await c.next("error")).toMatchObject({ message: "Not authenticated" });
+      c.close();
+    });
+  });
+
+  describe("auth throttle and reconnect token", () => {
+    const TOKEN = /^[0-9a-f]{64}$/;
+
+    it("issues a random 256-bit token on password login, and accepts it", async ({ backend }) => {
+      const a = await backend.connect();
+      a.send({ type: "auth", password: backend.password });
+      const { token } = await a.next("authResult");
+      expect(token).toMatch(TOKEN);
+      expect(token).not.toContain(backend.password);
+
+      const b = await backend.connect();
+      await b.next("state");
+      b.send({ type: "auth", token });
+      expect(await b.next("authResult")).toEqual({ type: "authResult", success: true, token });
+      b.send({ type: "setTime", virtualMs: 7 });
+      expect((await b.next("state")).state.accumulatedVirtualMs).toBe(7);
+      a.close();
+      b.close();
+    });
+
+    it("holds a second password attempt from the same IP, and rejects a backlog", async ({ backend }) => {
+      const c = await backend.connect();
+      await c.next("state");
+      // Slots at 0s, 2s, 4s; the 4th would wait 6s (> 5s), so it's rejected now
+      for (let i = 0; i < 4; i++) c.send({ type: "auth", password: "wrong" });
+
+      // (Arrival order isn't fixed: the rejection is sent before the 1st check runs)
+      const isRejection = (m) => m.type === "authResult" && m.reason === "rateLimited";
+      expect(await c.next(isRejection, 500)).toEqual({ type: "authResult", success: false, reason: "rateLimited" });
+      expect(await c.next("authResult", 500)).toEqual({ type: "authResult", success: false });
+      // The 2nd and 3rd are held, not answered yet
+      await sleep(300);
+      await c.flush();
+      expect(c.pending("authResult")).toEqual([]);
+      c.close();
+    });
+
+    it("lets a token through while password attempts are throttled", async ({ backend }) => {
+      const lead = await connectLead(backend);
+      const token = tokens.get(backend);
+      const attacker = await backend.connect();
+      for (let i = 0; i < 4; i++) attacker.send({ type: "auth", password: "guess" });
+      await attacker.next((m) => m.type === "authResult" && m.reason === "rateLimited");
+
+      const reconnect = await backend.connect();
+      reconnect.send({ type: "auth", token });
+      expect(await reconnect.next("authResult", 500)).toMatchObject({ success: true });
+      lead.close();
+      attacker.close();
+      reconnect.close();
+    });
+
+    it.for([
+      ["a wrong token", "0".repeat(64)],
+      ["an empty token", ""],
+      // Same length in characters as a real token but longer in bytes: this
+      // used to make crypto.timingSafeEqual throw and crash the local server
+      ["a non-ASCII token", "é".repeat(64)],
+    ])("rejects %s without throttling", async ([, token], { backend }) => {
+      const c = await backend.connect();
+      for (let i = 0; i < 5; i++) c.send({ type: "auth", token });
+      for (let i = 0; i < 5; i++) {
+        expect(await c.next("authResult", 500)).toEqual({ type: "authResult", success: false });
+      }
+      // Still alive
+      await c.flush();
+      c.close();
+    });
+
+    it("keeps the same token across a restart", async ({ backend }) => {
+      (await connectLead(backend)).close();
+      const token = tokens.get(backend);
+      await backend.restart();
+      const c = await backend.connect();
+      c.send({ type: "auth", token });
+      expect(await c.next("authResult")).toEqual({ type: "authResult", success: true, token });
       c.close();
     });
   });

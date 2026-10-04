@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { defineProtocolTests } from "../shared/protocol-suite.js";
 import { PASSWORD, startServer } from "./server-harness.js";
@@ -29,16 +30,17 @@ const it = test.extend({
         return c;
       },
       /** SIGKILL (like a crash) then start again on the same port and state file. */
-      async restart(beforeStart) {
+      async restart(beforeStart, options) {
         const { port, stateFile } = current;
         await current.stop();
         beforeStart?.(stateFile);
-        current = await startServer({ stateFile, port });
+        current = await startServer({ stateFile, port, ...options });
       },
     });
     for (const s of sockets) s.close();
     await current.stop();
-    fs.rmSync(current.stateFile, { force: true });
+    // The state file's directory also holds the lead token file
+    fs.rmSync(path.dirname(current.stateFile), { recursive: true, force: true });
   },
   backend: async ({ server }, use) => {
     await use({ connect: () => server.connect(), restart: () => server.restart(), password: PASSWORD });
@@ -116,5 +118,40 @@ describe.concurrent("state file", () => {
     const c = await server.connect();
     const { state } = await c.next("state");
     expect(state).toMatchObject({ running: false, speed: 1, accumulatedVirtualMs: -3000 });
+  });
+});
+
+describe.concurrent("lead token file", () => {
+  const tokenFile = (server) => path.join(path.dirname(server.stateFile), ".timer-lead-token.json");
+
+  async function login(server, password = PASSWORD) {
+    const c = await server.connect();
+    c.send({ type: "auth", password });
+    const result = await c.next("authResult");
+    c.close();
+    return result;
+  }
+
+  it("is private to the server's user", async ({ server }) => {
+    await login(server);
+    expect(fs.statSync(tokenFile(server)).mode & 0o777).toBe(0o600);
+  });
+
+  it("doesn't contain the password", async ({ server }) => {
+    await login(server);
+    expect(fs.readFileSync(tokenFile(server), "utf8")).not.toContain(PASSWORD);
+  });
+
+  it("is revoked when LEAD_PASSWORD changes", async ({ server }) => {
+    const { token } = await login(server);
+    await server.restart(undefined, { password: "new-password" });
+
+    const c = await server.connect();
+    c.send({ type: "auth", token });
+    expect(await c.next("authResult")).toEqual({ type: "authResult", success: false });
+
+    const fresh = await login(server, "new-password");
+    expect(fresh.success).toBe(true);
+    expect(fresh.token).not.toBe(token);
   });
 });

@@ -12,6 +12,7 @@ export default defineConfig({
           environment: "node",
           // Tests spawn their own server process, so many can run at once
           maxConcurrency: 8,
+          testTimeout: 15_000,
         },
       },
       {
@@ -33,6 +34,7 @@ export default defineConfig({
         test: {
           name: "worker",
           include: ["test/worker/**/*.test.ts"],
+          testTimeout: 15_000,
         },
       },
     ],

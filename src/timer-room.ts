@@ -114,7 +114,7 @@ export class TimerRoom extends DurableObject<Env> {
     });
   }
 
-  async fetch(_request: Request): Promise<Response> {
+  async fetch(request: Request): Promise<Response> {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 

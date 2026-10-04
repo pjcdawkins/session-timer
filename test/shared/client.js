@@ -1,7 +1,8 @@
 // Small test wrapper around a WebSocket (browser-style API: works with Node's
 // global WebSocket and with workerd's WebSocket).
 
-const DEFAULT_TIMEOUT = 2000;
+// Generous: only reached when something is wrong, and CI machines can be slow
+const DEFAULT_TIMEOUT = 5000;
 
 /**
  * Wrap an open-or-opening WebSocket so tests can await specific messages.

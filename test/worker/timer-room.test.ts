@@ -32,7 +32,8 @@ async function connect() {
   return client;
 }
 
-// One shared Durable Object ("default-room"), so these tests run sequentially
+// One shared Durable Object ("default-room"), so these tests run sequentially.
+// A fresh object per test, since the suite caches the lead token per backend.
 const backend = {
   connect,
   password: PASSWORD,
@@ -42,7 +43,7 @@ const backend = {
   },
 };
 // biome-ignore lint/correctness/noEmptyPattern: Vitest fixtures must destructure their context
-const it = test.extend({ backend: async ({}, use: (b: typeof backend) => Promise<void>) => use(backend) });
+const it = test.extend({ backend: async ({}, use: (b: typeof backend) => Promise<void>) => use({ ...backend }) });
 
 describe("protocol", () => {
   defineProtocolTests(it);
