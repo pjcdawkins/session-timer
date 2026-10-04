@@ -70,7 +70,7 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 
 // Commands refused while the show lock is on (it applies to every lead screen)
-const LOCKED_COMMANDS = new Set(["reset", "setSpeed", "setTime", "setHighlight"]);
+const LOCKED_COMMANDS = new Set(["stop", "reset", "setSpeed", "setTime", "setHighlight"]);
 
 export class TimerRoom extends DurableObject<Env> {
   private state: InternalState = { ...DEFAULT_STATE };

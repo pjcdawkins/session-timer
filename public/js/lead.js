@@ -46,6 +46,7 @@ const screensSummaryText = document.getElementById("screens-summary-text");
 const lockIndicator = document.getElementById("lock-indicator");
 const btnPerform = document.getElementById("btn-perform");
 const btnPerformExit = document.getElementById("btn-perform-exit");
+const btnPerformStart = document.getElementById("btn-perform-start");
 
 const btnQr = document.getElementById("btn-qr");
 const qrModal = document.getElementById("qr-modal");
@@ -113,7 +114,7 @@ connect({
 
     running = state.running;
     btnStart.disabled = state.running;
-    btnStop.disabled = !state.running;
+    btnPerformStart.classList.toggle("hidden", state.running);
 
     setTimeControls.classList.toggle("hidden", state.running);
 
@@ -222,6 +223,7 @@ function command(msg) {
 
 // Transport
 btnStart.addEventListener("click", () => command({ type: "start" }));
+btnPerformStart.addEventListener("click", () => command({ type: "start" }));
 btnStop.addEventListener("click", () => command({ type: "stop" }));
 
 // Reset needs a second click within 3s
@@ -242,7 +244,8 @@ btnReset.addEventListener("click", () => {
   }
 });
 
-// Keyboard: Space = Start (never toggles, so a double press can't pause), Esc = Pause
+// Keyboard: Space = Start (never toggles, so a double press can't pause),
+// Esc = Pause (except in Perform mode or under Show lock)
 document.addEventListener("keydown", (e) => {
   if (!authenticated || e.repeat) return;
   if (e.target.closest("input, textarea, select")) return;
@@ -252,7 +255,9 @@ document.addEventListener("keydown", (e) => {
   } else if (e.code === "Escape") {
     if (!qrModal.classList.contains("hidden")) return;
     e.preventDefault();
-    if (running) command({ type: "stop" });
+    if (running && !lastState?.locked && !document.body.classList.contains("perform")) {
+      command({ type: "stop" });
+    }
   }
 });
 // Stop Space from also "clicking" whichever button has focus
@@ -260,10 +265,12 @@ document.addEventListener("keyup", (e) => {
   if (e.code === "Space" && e.target.tagName === "BUTTON") e.preventDefault();
 });
 
-// Show lock: disables reset, set time, speed and highlight controls on every
-// lead screen. It is part of the server state, and the server enforces it.
+// Show lock: disables pause, reset, set time, speed and highlight controls on
+// every lead screen (only Start stays). It is part of the server state, and
+// the server enforces it.
 function applyLock(locked) {
   lockEnabled.checked = locked;
+  btnStop.disabled = locked || !running;
   lockable.disabled = locked;
   btnReset.disabled = locked;
   lockIndicator.classList.toggle("hidden", !locked);
@@ -440,12 +447,11 @@ function setPerform(on) {
 try { setPerform(localStorage.getItem(PERFORM_KEY) === "1"); } catch { /* ignore */ }
 
 btnPerform.addEventListener("click", () => {
-  if (!lastState?.locked) {
-    // Offline: command() shows the warning, and we stay out of Perform mode
-    // rather than hiding the controls with the lock off
-    if (!command({ type: "setLock", locked: true })) return;
-    applyLock(true);
-  }
+  // Always send it: lastState may be stale (e.g. an unlock still in flight).
+  // Offline: command() shows the warning, and we stay out of Perform mode
+  // rather than hiding the controls with the lock off
+  if (!command({ type: "setLock", locked: true })) return;
+  applyLock(true);
   setPerform(true);
 });
 
