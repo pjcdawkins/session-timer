@@ -1324,6 +1324,23 @@ body.perform #controls {
   display: none;
 }
 
+/* Narrow screens: left-align the status bar (the exit button is at the bottom)
+   so the screens summary stays clear of the theme/fullscreen buttons */
+@media (max-width: 600px) {
+  body.perform #status-bar {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+    padding-right: 5.5rem;
+  }
+
+  body.perform #screens-summary {
+    flex-basis: 100%;
+    padding-left: 0;
+    border-left: none;
+  }
+}
+
 body.perform .app.lead-app {
   justify-content: center;
   padding-top: 3rem;

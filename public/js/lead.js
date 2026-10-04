@@ -358,14 +358,19 @@ function renderScreens(clients) {
   }));
   screensEmpty.classList.toggle("hidden", rows.length > 0);
 
-  // Compact version for Perform mode: count, coloured by the worst screen
-  const ok = rows.filter((r) => r.health === "ok").length;
-  const worst = rows.some((r) => r.health === "lost") ? "lost" : rows.some((r) => r.health === "warn") ? "warn" : "ok";
+  // Compact version for Perform mode: count, plus how many are quiet or lost
+  // (in words as well as colour), coloured by the worst screen
+  const count = (health) => rows.filter((r) => r.health === health).length;
+  const ok = count("ok");
+  const warn = count("warn");
+  const lost = count("lost");
+  const worst = lost ? "lost" : warn ? "warn" : "ok";
   screensSummary.className = `perform-only screen ${rows.length ? worst : "none"}`;
   screensSummary.classList.toggle("stale", screensPanel.classList.contains("stale"));
-  screensSummaryText.textContent =
-    !rows.length ? "No screens" :
-    `${ok === rows.length ? rows.length : `${ok}/${rows.length}`} ${rows.length === 1 ? "screen" : "screens"}`;
+  const total = `${ok === rows.length ? rows.length : `${ok}/${rows.length}`} ${rows.length === 1 ? "screen" : "screens"}`;
+  screensSummaryText.textContent = !rows.length
+    ? "No screens"
+    : [total, lost && `${lost} lost`, warn && `${warn} quiet`].filter(Boolean).join(" · ");
 }
 
 document.getElementById("btn-screens-clear").addEventListener("click", () => {
@@ -435,7 +440,12 @@ function setPerform(on) {
 try { setPerform(localStorage.getItem(PERFORM_KEY) === "1"); } catch { /* ignore */ }
 
 btnPerform.addEventListener("click", () => {
-  if (!lastState?.locked && command({ type: "setLock", locked: true })) applyLock(true);
+  if (!lastState?.locked) {
+    // Offline: command() shows the warning, and we stay out of Perform mode
+    // rather than hiding the controls with the lock off
+    if (!command({ type: "setLock", locked: true })) return;
+    applyLock(true);
+  }
   setPerform(true);
 });
 

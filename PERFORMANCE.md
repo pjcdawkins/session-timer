@@ -13,7 +13,7 @@
 - `npm run show` (auto-restarts the server, keeps the Mac awake, state survives restarts).
 - On mains power; disable automatic updates; Do Not Disturb on.
 - Lead page: `http://localhost:8787/lead`. Turn on **Show lock** once set up (it locks every lead screen, not just this one).
-- To perform from a lead screen (e.g. a phone), tap **Perform mode**: it hides the controls, shows the time large, and turns on Show lock. The status bar shows a screens count (coloured by the worst screen). Tap **Exit perform mode** to get the controls back; the lock stays on.
+- To perform from a lead screen (e.g. a phone), tap **Perform mode**: it hides the controls, shows the time large, and turns on Show lock. It only enters Perform mode if the lock could be turned on. The status bar shows a screens count, with how many are quiet or lost. Tap **Exit perform mode** to get the controls back; the lock stays on.
 - Space = Start, Esc = Pause. Reset needs two clicks.
 
 ## Stage screens
