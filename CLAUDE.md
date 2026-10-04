@@ -66,7 +66,7 @@ Two pages share common modules:
 
 Shared modules:
 - **`websocket-client.js`** — Connect, auto-reconnect with exponential backoff, clock offset calculation. Reports connection status as `"connected"`, `"reconnecting"`, or `"disconnected"` (after 3+ failed attempts)
-- **`timer-display.js`** — SVG analog clock (minute + second hands), digital HH:MM:SS.t display, real-time corner display, 60fps render loop via requestAnimationFrame
+- **`timer-display.js`** — SVG analog clock (minute + second hands), digital HH:MM:SS display (with .t tenths below 1x), real-time corner display, 60fps render loop via requestAnimationFrame
 
 ### Auth
 
