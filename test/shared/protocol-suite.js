@@ -122,20 +122,32 @@ export function defineProtocolTests(it) {
       b.close();
     });
 
-    it("holds a second password attempt from the same IP, and rejects a backlog", async ({ backend }) => {
+    it("checks held password attempts 2s apart, and rejects a backlog", async ({ backend }) => {
       const c = await backend.connect();
       await c.next("state");
-      // Slots at 0s, 2s, 4s; the 4th would wait 6s (> 5s), so it's rejected now
-      for (let i = 0; i < 4; i++) c.send({ type: "auth", password: "wrong" });
+      const sentAt = Date.now();
+      // Slots at 0s, 2s, 4s; the 4th would wait 6s (> 5s), so it's rejected now.
+      // The 3rd is the right password, to show held attempts really are checked.
+      for (const password of ["wrong", "wrong", backend.password, "wrong"]) c.send({ type: "auth", password });
+      const results = [];
+      for (let i = 0; i < 4; i++) {
+        const msg = await c.next("authResult");
+        results.push({ msg, at: Date.now() - sentAt });
+      }
 
-      // (Arrival order isn't fixed: the rejection is sent before the 1st check runs)
-      const isRejection = (m) => m.type === "authResult" && m.reason === "rateLimited";
-      expect(await c.next(isRejection, 500)).toEqual({ type: "authResult", success: false, reason: "rateLimited" });
-      expect(await c.next("authResult", 500)).toEqual({ type: "authResult", success: false });
-      // The 2nd and 3rd are held, not answered yet
-      await sleep(300);
-      await c.flush();
-      expect(c.pending("authResult")).toEqual([]);
+      // (The rejection is sent before the 1st check runs, so it may arrive first)
+      const rejected = results.filter((r) => r.msg.reason === "rateLimited");
+      const checked = results.filter((r) => !r.msg.reason);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].at).toBeLessThan(1000);
+
+      expect(checked.map((r) => r.msg.success)).toEqual([false, false, true]);
+      expect(checked[2].msg.token).toEqual(expect.any(String));
+      // Timer granularity: allow a little under the nominal 2s spacing
+      expect(checked[0].at).toBeLessThan(1000);
+      expect(checked[1].at).toBeGreaterThanOrEqual(1900);
+      expect(checked[2].at).toBeGreaterThanOrEqual(3900);
+      expect(checked[2].at - checked[1].at).toBeGreaterThanOrEqual(1900);
       c.close();
     });
 

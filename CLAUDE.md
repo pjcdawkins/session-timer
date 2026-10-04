@@ -11,7 +11,7 @@ npm run dev          # Cloudflare dev server (Miniflare) at http://localhost:878
 npm run deploy       # Deploy to Cloudflare Workers
 npm run typecheck    # TypeScript type check (no emit), including worker tests
 npm run lint         # Biome lint (warnings fail); `npm run lint:fix` applies safe fixes
-npm test             # All tests (Vitest), ~3s
+npm test             # All tests (Vitest), ~6s
 npm run test:watch   # Vitest watch mode
 npx vitest run --project server    # One project: server | frontend | worker
 npx vitest run -t "setSpeed"       # Tests whose name matches
