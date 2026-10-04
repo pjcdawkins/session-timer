@@ -34,6 +34,7 @@ export function defineProtocolTests(it) {
         accumulatedVirtualMs: DEFAULT_START_MS,
         startRealTimestamp: null,
         highlight: { interval: 10, offset: 0 },
+        locked: false,
       });
       expect(state.serverNow).toBeGreaterThanOrEqual(before - 1000);
       c.close();
@@ -74,6 +75,7 @@ export function defineProtocolTests(it) {
         { type: "setSpeed", speed: 2 },
         { type: "setTime", virtualMs: 0 },
         { type: "setHighlight", highlight: null },
+        { type: "setLock", locked: true },
       ]) {
         c.send(cmd);
         expect(await c.next("error")).toEqual({ type: "error", message: "Not authenticated" });
@@ -261,6 +263,58 @@ export function defineProtocolTests(it) {
     });
   });
 
+  describe("show lock", () => {
+    async function lockedLead(backend) {
+      const lead = await connectLead(backend);
+      lead.send({ type: "setLock", locked: true });
+      expect((await lead.next("state")).state.locked).toBe(true);
+      return lead;
+    }
+
+    it.for([
+      { type: "reset" },
+      { type: "setSpeed", speed: 2 },
+      { type: "setTime", virtualMs: 0 },
+      { type: "setHighlight", highlight: null },
+    ])("refuses $type while locked", async (cmd, { backend }) => {
+      const lead = await lockedLead(backend);
+      lead.send(cmd);
+      expect(await lead.next("error")).toEqual({ type: "error", message: "Show lock is on" });
+      await lead.flush();
+      expect(lead.pending("state")).toEqual([]);
+      lead.close();
+    });
+
+    it("still allows start and pause while locked", async ({ backend }) => {
+      const lead = await lockedLead(backend);
+      lead.send({ type: "start" });
+      expect((await lead.next("state")).state.running).toBe(true);
+      lead.send({ type: "stop" });
+      expect((await lead.next("state")).state.running).toBe(false);
+      lead.close();
+    });
+
+    it("applies to every lead, and any lead can unlock", async ({ backend }) => {
+      const a = await lockedLead(backend);
+      const b = await connectLead(backend);
+      b.send({ type: "reset" });
+      expect(await b.next("error")).toMatchObject({ message: "Show lock is on" });
+      b.send({ type: "setLock", locked: false });
+      expect((await b.next("state")).state.locked).toBe(false);
+      b.send({ type: "setSpeed", speed: 2 });
+      expect((await b.next("state")).state.speed).toBe(2);
+      a.close();
+      b.close();
+    });
+
+    it("only locks for an explicit true", async ({ backend }) => {
+      const lead = await connectLead(backend);
+      lead.send({ type: "setLock", locked: "yes" });
+      expect((await lead.next("state")).state.locked).toBe(false);
+      lead.close();
+    });
+  });
+
   describe("screens list", () => {
     it("is sent to authenticated leads with each pong", async ({ backend }) => {
       const lead = await connectLead(backend);
@@ -274,9 +328,9 @@ export function defineProtocolTests(it) {
       await lead.next("pong");
       const { clients } = await lead.next("clients");
       const byId = Object.fromEntries(clients.map((c) => [c.id, c]));
-      expect(byId["lead-1"]).toMatchObject({ name: "Lead laptop", role: "lead", rtt: 7 });
+      expect(byId["lead-1"]).toMatchObject({ name: "Lead laptop", role: "lead", authenticated: true, rtt: 7 });
       // Name truncated to 40 chars, unknown roles become viewer
-      expect(byId["viewer-1"]).toMatchObject({ name: "x".repeat(40), role: "viewer", rtt: 42 });
+      expect(byId["viewer-1"]).toMatchObject({ name: "x".repeat(40), role: "viewer", authenticated: false, rtt: 42 });
       expect(byId["viewer-1"].lastSeenAgoMs).toBeGreaterThanOrEqual(0);
 
       // Viewers never receive the list
@@ -296,6 +350,8 @@ export function defineProtocolTests(it) {
       await lead.next("state");
       lead.send({ type: "setHighlight", highlight: null });
       await lead.next("state");
+      lead.send({ type: "setLock", locked: true });
+      await lead.next("state");
       lead.close();
 
       await backend.restart();
@@ -307,6 +363,7 @@ export function defineProtocolTests(it) {
         speed: 2.5,
         accumulatedVirtualMs: 42_000,
         highlight: null,
+        locked: true,
       });
       c.close();
     });
