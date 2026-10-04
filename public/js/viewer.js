@@ -2,12 +2,14 @@ import { connect, getClientName, setClientName } from "./websocket-client.js";
 import { updateState, initAnalogClock, initDisplay, startRenderLoop } from "./timer-display.js";
 import { initWakeLock } from "./wake-lock.js";
 import { initFullscreen } from "./fullscreen.js";
+import { initTheme } from "./theme.js";
 import { initOffline } from "./offline.js";
 
 initAnalogClock(document.getElementById("analog-clock"));
 initDisplay();
 initWakeLock();
 initFullscreen();
+initTheme();
 initOffline();
 
 const statusBar = document.getElementById("status-bar");
