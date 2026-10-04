@@ -1294,13 +1294,21 @@ body:not(.perform) .perform-only {
 #screens-summary.warn #screens-summary-text { color: var(--amber); }
 #screens-summary.lost #screens-summary-text { color: var(--red); }
 
-#btn-perform-exit {
+/* Portrait: bottom centre, clear of the status bar and the corner displays.
+   Landscape (below): in the flow, centred under the digits. */
+#perform-actions {
   position: fixed;
-  /* Bottom centre: clear of the status bar and the corner displays */
   bottom: max(clamp(0.8rem, 2vw, 1.5rem), env(safe-area-inset-bottom));
   left: 50%;
-  transform: translateX(-50%);
+  translate: -50% 0;
   z-index: 300;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+#btn-perform-exit {
   height: 2rem;
   padding: 0 0.7rem;
   background: transparent;
@@ -1313,6 +1321,32 @@ body:not(.perform) .perform-only {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
+}
+
+/* Only while stopped: lead.js hides it when running */
+#btn-perform-start {
+  min-width: 9rem;
+  padding: 0.8rem 1.6rem;
+  background: rgba(76, 173, 106, 0.08);
+  border: 1px solid var(--green-dim);
+  border-radius: 8px;
+  color: var(--green);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-in-out);
+}
+
+#btn-perform-start:hover {
+  background: rgba(76, 173, 106, 0.18);
+  box-shadow: 0 0 20px var(--green-glow);
+}
+
+#btn-perform-start:active {
+  transform: scale(0.96);
 }
 
 #btn-perform-exit:hover {
@@ -1373,5 +1407,21 @@ body.perform .app.lead-app #digital-clock {
 
   body.perform .app.lead-app #digital-clock {
     font-size: min(7.5vw, 22svh);
+  }
+
+  body.perform .main-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Side by side under the digits; the fixed height keeps the digits from
+     moving when Start hides */
+  #perform-actions {
+    position: static;
+    translate: none;
+    flex-direction: row;
+    height: 2.6rem;
+    margin-top: 1.5rem;
   }
 }

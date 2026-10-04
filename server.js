@@ -37,7 +37,7 @@ let state = {
 };
 
 // Commands refused while the show lock is on (it applies to every lead screen)
-const LOCKED_COMMANDS = new Set(["reset", "setSpeed", "setTime", "setHighlight"]);
+const LOCKED_COMMANDS = new Set(["stop", "reset", "setSpeed", "setTime", "setHighlight"]);
 
 // Persist state to disk so a crash/restart mid-performance resumes where it was.
 // startRealTimestamp is wall-clock time, so a running timer keeps its place.
