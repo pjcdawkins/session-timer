@@ -6,12 +6,14 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
 
 const PORT = Number(process.env.PORT) || 8787;
 const LEAD_PASSWORD = process.env.LEAD_PASSWORD || "session";
 const PUBLIC_DIR = path.resolve(__dirname, "public");
 const STATE_FILE = process.env.STATE_FILE || path.resolve(__dirname, ".timer-state.json");
+const TOKEN_FILE = path.join(path.dirname(STATE_FILE), ".timer-lead-token.json");
 // Sockets silent for longer than this are dropped (clients ping every 2s)
 const CLIENT_TIMEOUT_MS = 15_000;
 
@@ -134,7 +136,7 @@ const wss = new WebSocketServer({ server: httpServer, path: "/ws", perMessageDef
 // Server-level errors (e.g. port in use) are re-emitted here; the httpServer handler below deals with them
 wss.on("error", () => {});
 
-/** @type {Map<import('ws').WebSocket, { authenticated: boolean, id: string, name: string, role: string, rtt: number | null, lastSeen: number }>} */
+/** @type {Map<import('ws').WebSocket, { authenticated: boolean, ip: string, id: string, name: string, role: string, rtt: number | null, lastSeen: number }>} */
 const clients = new Map();
 
 function listClients() {
@@ -145,6 +147,69 @@ function listClients() {
     list.push({ id: c.id, name: c.name, role: c.role, authenticated: c.authenticated, rtt: c.rtt, lastSeenAgoMs: now - c.lastSeen });
   }
   return list;
+}
+
+// Auth throttle (mirrors timer-room.ts): one password check per IP per
+// AUTH_INTERVAL_MS; extra attempts are held, or rejected if the wait would
+// exceed AUTH_MAX_WAIT_MS.
+const AUTH_INTERVAL_MS = 2_000;
+const AUTH_MAX_WAIT_MS = 5_000;
+/** @type {Map<string, number>} */
+const authNextSlot = new Map();
+
+// Reconnect token (mirrors timer-room.ts): issued after a successful password
+// check and accepted without throttling, so a client sharing the lead's IP
+// can't starve reconnects. Changing LEAD_PASSWORD revokes it.
+// It's 256 random bits (never derived from the password, or password guesses
+// could be submitted as tokens to dodge the throttle), persisted next to the
+// state file so it survives restarts, alongside an HMAC of the password keyed
+// by the token: if LEAD_PASSWORD changes, a new token is issued.
+const LEAD_TOKEN = loadOrCreateLeadToken();
+
+function loadOrCreateLeadToken() {
+  const check = (token) => crypto.createHmac("sha256", token).update(LEAD_PASSWORD).digest("hex");
+  try {
+    const stored = JSON.parse(fs.readFileSync(TOKEN_FILE, "utf8"));
+    if (typeof stored.token === "string" && stored.passwordCheck === check(stored.token)) return stored.token;
+  } catch (err) {
+    if (err.code !== "ENOENT") console.error(`Could not read ${TOKEN_FILE}:`, err.message);
+  }
+  const token = crypto.randomBytes(32).toString("hex");
+  try {
+    fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token, passwordCheck: check(token) }), { mode: 0o600 });
+  } catch (err) {
+    console.error(`Could not write ${TOKEN_FILE}:`, err.message);
+  }
+  return token;
+}
+
+const LEAD_TOKEN_BUF = Buffer.from(LEAD_TOKEN);
+
+function isLeadToken(token) {
+  if (typeof token !== "string") return false;
+  // Compare byte lengths, not string lengths: timingSafeEqual throws on a
+  // mismatch, and a non-ASCII string can have the right length in characters
+  const buf = Buffer.from(token);
+  return buf.length === LEAD_TOKEN_BUF.length && crypto.timingSafeEqual(buf, LEAD_TOKEN_BUF);
+}
+
+/** Returns ms to wait before checking, or null if the wait would be too long. */
+function reserveAuthSlot(ip) {
+  const now = Date.now();
+  // Entries are re-inserted on every reservation, so the map is roughly
+  // ordered by expiry: drop expired entries from the front and stop at the
+  // first live one (O(1) amortized). Any expired entry left behind is
+  // harmless, and is removed once the entries ahead of it expire.
+  for (const [key, slot] of authNextSlot) {
+    if (slot > now) break;
+    authNextSlot.delete(key);
+  }
+  const slot = Math.max(now, authNextSlot.get(ip) ?? 0);
+  const wait = slot - now;
+  if (wait > AUTH_MAX_WAIT_MS) return null;
+  authNextSlot.delete(ip);
+  authNextSlot.set(ip, slot + AUTH_INTERVAL_MS);
+  return wait;
 }
 
 function broadcast() {
@@ -171,8 +236,8 @@ setInterval(() => {
   }
 }, 5_000);
 
-wss.on("connection", (ws) => {
-  const client = { authenticated: false, id: "", name: "", role: "viewer", rtt: null, lastSeen: Date.now() };
+wss.on("connection", (ws, req) => {
+  const client = { authenticated: false, ip: req.socket.remoteAddress ?? "unknown", id: "", name: "", role: "viewer", rtt: null, lastSeen: Date.now() };
   clients.set(ws, client);
 
   // Send current state immediately on connect
@@ -205,9 +270,31 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (msg?.type === "auth" && typeof msg.token === "string") {
+      client.authenticated = isLeadToken(msg.token);
+      ws.send(JSON.stringify({
+        type: "authResult",
+        success: client.authenticated,
+        ...(client.authenticated && { token: LEAD_TOKEN }),
+      }));
+      return;
+    }
+
     if (msg?.type === "auth") {
-      client.authenticated = msg.password === LEAD_PASSWORD;
-      ws.send(JSON.stringify({ type: "authResult", success: client.authenticated }));
+      const wait = reserveAuthSlot(client.ip);
+      if (wait === null) {
+        ws.send(JSON.stringify({ type: "authResult", success: false, reason: "rateLimited" }));
+        return;
+      }
+      setTimeout(() => {
+        if (ws.readyState !== ws.OPEN) return;
+        client.authenticated = msg.password === LEAD_PASSWORD;
+        ws.send(JSON.stringify({
+          type: "authResult",
+          success: client.authenticated,
+          ...(client.authenticated && { token: LEAD_TOKEN }),
+        }));
+      }, wait);
       return;
     }
 

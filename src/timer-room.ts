@@ -12,6 +12,7 @@ interface InternalState {
 
 interface Attachment {
   authenticated: boolean;
+  ip: string;
   id: string;
   name: string;
   role: ClientRole;
@@ -31,11 +32,71 @@ const DEFAULT_STATE: InternalState = {
   locked: false,
 };
 
+// Auth throttle: each IP gets one password check per AUTH_INTERVAL_MS. Extra
+// attempts are queued (held, then checked); if the queue wait would exceed
+// AUTH_MAX_WAIT_MS the attempt is rejected immediately.
+const AUTH_INTERVAL_MS = 2_000;
+const AUTH_MAX_WAIT_MS = 5_000;
+
+// Reconnect token: issued after a successful password check and accepted
+// without throttling, so a client sharing the lead's IP can't starve
+// reconnects. It's 256 random bits (never derived from the password, or
+// password guesses could be submitted as tokens to dodge the throttle),
+// persisted in DO storage alongside an HMAC of the password keyed by the
+// token. If LEAD_PASSWORD changes the HMAC no longer matches, so a new token
+// is issued and old ones are revoked.
+interface StoredLeadToken {
+  token: string;
+  passwordCheck: string;
+}
+
+function toHex(buf: ArrayBuffer | Uint8Array): string {
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function passwordCheck(token: string, password: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(token), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  return toHex(await crypto.subtle.sign("HMAC", key, enc.encode(password)));
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 // Commands refused while the show lock is on (it applies to every lead screen)
 const LOCKED_COMMANDS = new Set(["reset", "setSpeed", "setTime", "setHighlight"]);
 
 export class TimerRoom extends DurableObject<Env> {
   private state: InternalState = { ...DEFAULT_STATE };
+  // In-memory only: lost on hibernation, which only happens after the DO
+  // has been idle, by which point any reserved slots have expired anyway.
+  private authNextSlot = new Map<string, number>();
+  private leadToken: Promise<string> | null = null;
+
+  private getLeadToken(): Promise<string> {
+    this.leadToken ??= this.loadOrCreateLeadToken().catch((err) => {
+      this.leadToken = null; // Don't cache a failure
+      throw err;
+    });
+    return this.leadToken;
+  }
+
+  private async loadOrCreateLeadToken(): Promise<string> {
+    const password = this.env.LEAD_PASSWORD;
+    const stored = await this.ctx.storage.get<StoredLeadToken>("leadToken");
+    if (stored && constantTimeEqual(stored.passwordCheck, await passwordCheck(stored.token, password))) {
+      return stored.token;
+    }
+    const token = toHex(crypto.getRandomValues(new Uint8Array(32)));
+    await this.ctx.storage.put("leadToken", { token, passwordCheck: await passwordCheck(token, password) });
+    return token;
+  }
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -60,6 +121,7 @@ export class TimerRoom extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
     const attachment: Attachment = {
       authenticated: false,
+      ip: request.headers.get("CF-Connecting-IP") ?? "unknown",
       id: "",
       name: "",
       role: "viewer",
@@ -110,10 +172,37 @@ export class TimerRoom extends DurableObject<Env> {
       return;
     }
 
+    if (msg.type === "auth" && typeof msg.token === "string") {
+      const token = await this.getLeadToken();
+      const success = constantTimeEqual(msg.token, token);
+      try {
+        const current = ws.deserializeAttachment() as Attachment;
+        current.authenticated = success;
+        ws.serializeAttachment(current);
+        ws.send(JSON.stringify({ type: "authResult", success, ...(success && { token }) }));
+      } catch {
+        // Socket closed
+      }
+      return;
+    }
+
     if (msg.type === "auth") {
-      attachment.authenticated = msg.password === this.env.LEAD_PASSWORD;
-      ws.serializeAttachment(attachment);
-      ws.send(JSON.stringify({ type: "authResult", success: attachment.authenticated }));
+      const wait = this.reserveAuthSlot(attachment.ip);
+      if (wait === null) {
+        ws.send(JSON.stringify({ type: "authResult", success: false, reason: "rateLimited" }));
+        return;
+      }
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+      try {
+        // Re-read: hello/ping may have updated the attachment while we waited
+        const current = ws.deserializeAttachment() as Attachment;
+        current.authenticated = msg.password === this.env.LEAD_PASSWORD;
+        ws.serializeAttachment(current);
+        const token = current.authenticated ? await this.getLeadToken() : undefined;
+        ws.send(JSON.stringify({ type: "authResult", success: current.authenticated, token }));
+      } catch {
+        // Socket closed while waiting
+      }
       return;
     }
 
@@ -226,6 +315,25 @@ export class TimerRoom extends DurableObject<Env> {
   async alarm(): Promise<void> {
     this.broadcast();
     this.ensureHeartbeat();
+  }
+
+  /** Returns ms to wait before checking, or null if the wait would be too long. */
+  private reserveAuthSlot(ip: string): number | null {
+    const now = Date.now();
+    // Entries are re-inserted on every reservation, so the map is roughly
+    // ordered by expiry: drop expired entries from the front and stop at the
+    // first live one (O(1) amortized). Any expired entry left behind is
+    // harmless, and is removed once the entries ahead of it expire.
+    for (const [key, slot] of this.authNextSlot) {
+      if (slot > now) break;
+      this.authNextSlot.delete(key);
+    }
+    const slot = Math.max(now, this.authNextSlot.get(ip) ?? 0);
+    const wait = slot - now;
+    if (wait > AUTH_MAX_WAIT_MS) return null;
+    this.authNextSlot.delete(ip);
+    this.authNextSlot.set(ip, slot + AUTH_INTERVAL_MS);
+    return wait;
   }
 
   private accumulate(): void {

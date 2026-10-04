@@ -49,6 +49,29 @@ const qrUrlText = document.getElementById("qr-url-text");
 const qrClose = document.getElementById("qr-close");
 
 let authenticated = false;
+// Auth state of the *current* socket: false from (re)connect until authResult
+let sessionAuthed = false;
+// Whether an auth attempt is in flight. Only one is outstanding at a time, so
+// a delayed (throttled) result always belongs to it.
+let authPending = false;
+
+// After a password login the server issues a reconnect token, which we store
+// instead of the password. Token auth isn't throttled, so reconnects can't be
+// starved by someone else on the same IP.
+const TOKEN_KEY = "timer-lead-token";
+const LEGACY_PASSWORD_KEY = "timer-lead-pw"; // Stored by older versions
+
+function storedCredential() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) return { token };
+  const password = localStorage.getItem(LEGACY_PASSWORD_KEY);
+  return password ? { password } : null;
+}
+
+function sendAuth(credential) {
+  if (authPending || !credential) return;
+  if (send({ type: "auth", ...credential })) authPending = true;
+}
 let qrLoaded = false;
 let running = false;
 let lastState = null;
@@ -93,23 +116,40 @@ connect({
     syncControls(state);
   },
   onClients: renderScreens,
-  onAuth: (success) => {
+  onAuth: (success, reason, token) => {
+    if (!authPending) return; // Stale result from a previous socket
+    authPending = false;
     if (success) {
       authenticated = true;
+      sessionAuthed = true;
+      if (token) localStorage.setItem(TOKEN_KEY, token);
+      localStorage.removeItem(LEGACY_PASSWORD_KEY);
       authGate.classList.add("hidden");
       controls.classList.remove("hidden");
       loadQr();
+    } else if (reason === "rateLimited" && authenticated) {
+      // Re-auth after reconnect was throttled: retry quietly
+      setTimeout(() => sendAuth(storedCredential()), 3000);
     } else {
       authenticated = false;
-      localStorage.removeItem("timer-lead-pw");
+      if (reason !== "rateLimited") {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(LEGACY_PASSWORD_KEY);
+      }
       controls.classList.add("hidden");
       authGate.classList.remove("hidden");
+      authError.textContent = reason === "rateLimited"
+        ? "Too many attempts, try again in a few seconds"
+        : "Wrong password";
       authError.classList.remove("hidden");
       passwordInput.value = "";
       passwordInput.focus();
     }
   },
   onConnection: (status) => {
+    // Any connection change means a new socket that hasn't authenticated yet
+    sessionAuthed = false;
+    authPending = false;
     screensPanel.classList.toggle("stale", status !== "connected");
     connectionDot.className = status === "connected" ? "dot connected" : "dot";
     if (status === "reconnecting") {
@@ -119,8 +159,8 @@ connect({
       statusText.textContent = "DISCONNECTED";
       statusBar.className = "status";
     }
-    if (status === "connected" && (authenticated || localStorage.getItem("timer-lead-pw"))) {
-      send({ type: "auth", password: localStorage.getItem("timer-lead-pw") || "" });
+    if (status === "connected") {
+      sendAuth(storedCredential());
     }
   },
   clientRole: "lead",
@@ -131,9 +171,7 @@ startRenderLoop();
 // Auth form
 document.getElementById("auth-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  const password = passwordInput.value;
-  localStorage.setItem("timer-lead-pw", password);
-  send({ type: "auth", password });
+  sendAuth({ password: passwordInput.value });
 });
 
 // Sync controls from server state. Another lead may change things at any time,
@@ -165,10 +203,11 @@ for (const input of editableInputs) {
   });
 }
 
-// Commands: warn loudly if the lead itself is offline, rather than silently dropping
+// Commands: warn loudly if the lead itself is offline (or its new socket is
+// still re-authenticating), rather than silently dropping
 let warningTimer = null;
 function command(msg) {
-  if (send(msg)) return true;
+  if (sessionAuthed && send(msg)) return true;
   commandWarning.classList.remove("hidden");
   clearTimeout(warningTimer);
   warningTimer = setTimeout(() => commandWarning.classList.add("hidden"), 3000);
