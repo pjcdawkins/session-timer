@@ -33,7 +33,11 @@ let state = {
   accumulatedVirtualMs: DEFAULT_START_MS,
   startRealTimestamp: null,
   highlight: { interval: 10, offset: 0 },
+  locked: false,
 };
+
+// Commands refused while the show lock is on (it applies to every lead screen)
+const LOCKED_COMMANDS = new Set(["reset", "setSpeed", "setTime", "setHighlight"]);
 
 // Persist state to disk so a crash/restart mid-performance resumes where it was.
 // startRealTimestamp is wall-clock time, so a running timer keeps its place.
@@ -140,7 +144,7 @@ function listClients() {
   const list = [];
   for (const c of clients.values()) {
     if (!c.id) continue;
-    list.push({ id: c.id, name: c.name, role: c.role, rtt: c.rtt, lastSeenAgoMs: now - c.lastSeen });
+    list.push({ id: c.id, name: c.name, role: c.role, authenticated: c.authenticated, rtt: c.rtt, lastSeenAgoMs: now - c.lastSeen });
   }
   return list;
 }
@@ -294,6 +298,11 @@ wss.on("connection", (ws, req) => {
       return;
     }
 
+    if (state.locked && LOCKED_COMMANDS.has(msg.type)) {
+      ws.send(JSON.stringify({ type: "error", message: "Show lock is on" }));
+      return;
+    }
+
     switch (msg.type) {
       case "start":
         if (!state.running) {
@@ -365,6 +374,11 @@ wss.on("connection", (ws, req) => {
         broadcast();
         break;
       }
+
+      case "setLock":
+        state.locked = msg.locked === true;
+        broadcast();
+        break;
     }
   });
 

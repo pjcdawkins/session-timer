@@ -31,12 +31,108 @@
   --hand-minute: #d4cfc7;
   --hand-second: #e86b4c;
   --hand-second-glow: rgba(232, 107, 76, 0.6);
+  --hand-minute-glow: rgba(212, 207, 199, 0.3);
+
+  --overlay-bg: rgba(5, 5, 5, 0.92);
+  --status-bar-bg: rgba(10, 10, 10, 0.95);
+  --clock-shadow: rgba(0, 0, 0, 0.5);
+  --digital-glow-faint: rgba(232, 168, 76, 0.05);
+  --hover-tint: rgba(255, 255, 255, 0.05);
+
+  color-scheme: dark;
 
   --font-mono: 'DM Mono', 'SF Mono', 'Cascadia Mono', monospace;
   --font-sans: 'Instrument Sans', -apple-system, sans-serif;
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Light Theme ─── */
+/* Applied when the system prefers light (unless overridden to dark),
+   or when explicitly chosen via data-theme="light". Keep both blocks in sync. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg-deep: #f3f0eb;
+    --bg-surface: #ebe7e1;
+    --bg-raised: #ffffff;
+    --bg-inset: #faf8f5;
+
+    --text-primary: #1d1a16;
+    --text-secondary: #6b645b;
+    --text-muted: #6e675d;
+
+    --amber: #94540d;
+    --amber-dim: #985c1b;
+    --amber-glow: rgba(192, 122, 38, 0.15);
+    --amber-glow-strong: rgba(192, 122, 38, 0.35);
+
+    --red: #a82e2e;
+    --red-dim: #d98a8a;
+    --red-glow: rgba(191, 52, 52, 0.25);
+
+    --green: #236d3b;
+    --green-dim: #82c196;
+    --green-glow: rgba(42, 129, 70, 0.25);
+
+    --clock-face: #ffffff;
+    --clock-rim: #d8d1c6;
+    --clock-tick: #cfc7bb;
+    --clock-tick-hour: #7a7166;
+    --hand-minute: #2a2621;
+    --hand-second: #d64a28;
+    --hand-second-glow: rgba(214, 74, 40, 0.3);
+    --hand-minute-glow: rgba(42, 38, 33, 0.15);
+
+    --overlay-bg: rgba(243, 240, 235, 0.92);
+    --status-bar-bg: rgba(243, 240, 235, 0.95);
+    --clock-shadow: rgba(60, 45, 25, 0.12);
+    --digital-glow-faint: rgba(192, 122, 38, 0.03);
+    --hover-tint: rgba(0, 0, 0, 0.05);
+
+    color-scheme: light;
+  }
+}
+
+:root[data-theme="light"] {
+  --bg-deep: #f3f0eb;
+  --bg-surface: #ebe7e1;
+  --bg-raised: #ffffff;
+  --bg-inset: #faf8f5;
+
+  --text-primary: #1d1a16;
+  --text-secondary: #6b645b;
+  --text-muted: #6e675d;
+
+  --amber: #94540d;
+  --amber-dim: #985c1b;
+  --amber-glow: rgba(192, 122, 38, 0.15);
+  --amber-glow-strong: rgba(192, 122, 38, 0.35);
+
+  --red: #a82e2e;
+  --red-dim: #d98a8a;
+  --red-glow: rgba(191, 52, 52, 0.25);
+
+  --green: #236d3b;
+  --green-dim: #82c196;
+  --green-glow: rgba(42, 129, 70, 0.25);
+
+  --clock-face: #ffffff;
+  --clock-rim: #d8d1c6;
+  --clock-tick: #cfc7bb;
+  --clock-tick-hour: #7a7166;
+  --hand-minute: #2a2621;
+  --hand-second: #d64a28;
+  --hand-second-glow: rgba(214, 74, 40, 0.3);
+  --hand-minute-glow: rgba(42, 38, 33, 0.15);
+
+  --overlay-bg: rgba(243, 240, 235, 0.92);
+  --status-bar-bg: rgba(243, 240, 235, 0.95);
+  --clock-shadow: rgba(60, 45, 25, 0.12);
+  --digital-glow-faint: rgba(192, 122, 38, 0.03);
+  --hover-tint: rgba(0, 0, 0, 0.05);
+
+  color-scheme: light;
 }
 
 /* ─── Reset & Base ─── */
@@ -93,7 +189,7 @@ body::before {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.6rem 1rem;
-  background: linear-gradient(to bottom, rgba(10, 10, 10, 0.95), transparent);
+  background: linear-gradient(to bottom, var(--status-bar-bg), transparent);
   z-index: 100;
   font-family: var(--font-sans);
   font-size: 0.7rem;
@@ -130,7 +226,7 @@ body::before {
   width: clamp(200px, 42vmin, 420px);
   height: clamp(200px, 42vmin, 420px);
   flex-shrink: 0;
-  filter: drop-shadow(0 0 40px rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(0 0 40px var(--clock-shadow));
 }
 
 .analog-clock-svg {
@@ -172,7 +268,7 @@ body::before {
   stroke: var(--hand-minute);
   stroke-width: 2.5;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 2px rgba(212, 207, 199, 0.3));
+  filter: drop-shadow(0 0 2px var(--hand-minute-glow));
 }
 
 .hand-second {
@@ -197,7 +293,7 @@ body::before {
   color: var(--text-primary);
   text-shadow:
     0 0 30px var(--amber-glow),
-    0 0 60px rgba(232, 168, 76, 0.05);
+    0 0 60px var(--digital-glow-faint);
   line-height: 1;
   text-align: center;
   white-space: nowrap;
@@ -284,7 +380,7 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(5, 5, 5, 0.92);
+  background: var(--overlay-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   animation: fadeIn 0.4s var(--ease-out-expo);
@@ -732,7 +828,7 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(5, 5, 5, 0.92);
+  background: var(--overlay-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   animation: fadeIn 0.4s var(--ease-out-expo);
@@ -889,11 +985,13 @@ body::before {
 }
 
 /* ─── Fullscreen Button ─── */
-#btn-fullscreen {
+#btn-fullscreen,
+#btn-theme {
   position: fixed;
   top: 0.5rem;
   right: 0.75rem;
-  z-index: 200;
+  /* Above the auth gate and QR modal so these stay usable on those screens */
+  z-index: 1001;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -902,18 +1000,24 @@ body::before {
   background: transparent;
   border: none;
   border-radius: 5px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: color 0.2s, background 0.2s;
   padding: 0;
 }
 
-#btn-fullscreen:hover {
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.05);
+#btn-theme {
+  right: 2.9rem;
 }
 
-#btn-fullscreen svg {
+#btn-fullscreen:hover,
+#btn-theme:hover {
+  color: var(--text-primary);
+  background: var(--hover-tint);
+}
+
+#btn-fullscreen svg,
+#btn-theme svg {
   display: block;
 }
 
@@ -1092,6 +1196,15 @@ fieldset.lockable:disabled {
 }
 
 .screen.lost .screen-name { color: var(--red); }
+
+.screen-role {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+  white-space: nowrap;
+}
 
 .screen-detail {
   font-family: var(--font-mono);

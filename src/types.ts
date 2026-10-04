@@ -13,6 +13,7 @@ export interface TimerState {
   startRealTimestamp: number | null;
   serverNow: number;
   highlight: { interval: number; offset: number } | null;
+  locked: boolean;
 }
 
 export type ClientRole = "viewer" | "lead";
@@ -21,6 +22,7 @@ export interface ClientInfo {
   id: string;
   name: string;
   role: ClientRole;
+  authenticated: boolean;
   rtt: number | null;
   lastSeenAgoMs: number;
 }
@@ -34,7 +36,8 @@ export type ClientMessage =
   | { type: "reset" }
   | { type: "setSpeed"; speed: number }
   | { type: "setTime"; virtualMs: number }
-  | { type: "setHighlight"; highlight: { interval: number; offset: number } | null };
+  | { type: "setHighlight"; highlight: { interval: number; offset: number } | null }
+  | { type: "setLock"; locked: boolean };
 
 export type ServerMessage =
   | { type: "state"; state: TimerState }

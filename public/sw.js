@@ -18,6 +18,7 @@ const SHELL = [
   "/js/fullscreen.js",
   "/js/lead.js",
   "/js/offline.js",
+  "/js/theme.js",
   "/js/timer-display.js",
   "/js/viewer.js",
   "/js/wake-lock.js",

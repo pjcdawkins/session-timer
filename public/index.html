@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Session Timer</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script>
+    // Apply a saved theme before first paint (see js/theme.js).
+    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
 </head>
 <body>
   <div class="app">

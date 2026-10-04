@@ -3,12 +3,14 @@ import { updateState, initAnalogClock, initDisplay, startRenderLoop } from "./ti
 import { initWakeLock } from "./wake-lock.js";
 import { renderSVG } from "./vendor/uqr.js";
 import { initFullscreen } from "./fullscreen.js";
+import { initTheme } from "./theme.js";
 import { initOffline } from "./offline.js";
 
 initAnalogClock(document.getElementById("analog-clock"));
 initDisplay();
 initWakeLock();
 initFullscreen();
+initTheme();
 initOffline();
 
 const authGate = document.getElementById("auth-gate");
@@ -72,6 +74,8 @@ function sendAuth(credential) {
 }
 let qrLoaded = false;
 let running = false;
+let lastState = null;
+let resetConfirmTimer = null; // Declared early: restored state is applied during connect()
 
 async function loadQr() {
   if (qrLoaded) return;
@@ -108,18 +112,8 @@ connect({
 
     setTimeControls.classList.toggle("hidden", state.running);
 
-    // Sync speed input and preset highlight
-    speedInput.value = state.speed;
-    presetButtons.forEach((btn) => {
-      btn.classList.toggle("active", parseFloat(btn.dataset.speed) === state.speed);
-    });
-
-    // Sync highlight controls
-    highlightEnabled.checked = !!state.highlight;
-    if (state.highlight) {
-      highlightInterval.value = state.highlight.interval;
-      highlightOffset.value = state.highlight.offset;
-    }
+    lastState = state;
+    syncControls(state);
   },
   onClients: renderScreens,
   onAuth: (success, reason, token) => {
@@ -180,14 +174,44 @@ document.getElementById("auth-form").addEventListener("submit", (e) => {
   sendAuth({ password: passwordInput.value });
 });
 
+// Sync controls from server state. Another lead may change things at any time,
+// so skip fields being edited here; they re-sync on blur if left unchanged.
+const editableInputs = [speedInput, highlightInterval, highlightOffset];
+function syncValue(input, value) {
+  if (document.activeElement !== input) input.value = value;
+}
+function syncControls(state) {
+  syncValue(speedInput, state.speed);
+  presetButtons.forEach((btn) => {
+    btn.classList.toggle("active", parseFloat(btn.dataset.speed) === state.speed);
+  });
+
+  highlightEnabled.checked = !!state.highlight;
+  if (state.highlight) {
+    syncValue(highlightInterval, state.highlight.interval);
+    syncValue(highlightOffset, state.highlight.offset);
+  }
+
+  applyLock(!!state.locked);
+}
+for (const input of editableInputs) {
+  input.addEventListener("input", () => { input.dataset.edited = "1"; });
+  input.addEventListener("blur", () => {
+    // An edited field sent a command on change; the resulting broadcast updates it
+    if (!input.dataset.edited && lastState) syncControls(lastState);
+    delete input.dataset.edited;
+  });
+}
+
 // Commands: warn loudly if the lead itself is offline (or its new socket is
 // still re-authenticating), rather than silently dropping
 let warningTimer = null;
 function command(msg) {
-  if (sessionAuthed && send(msg)) return;
+  if (sessionAuthed && send(msg)) return true;
   commandWarning.classList.remove("hidden");
   clearTimeout(warningTimer);
   warningTimer = setTimeout(() => commandWarning.classList.add("hidden"), 3000);
+  return false;
 }
 
 // Transport
@@ -195,7 +219,6 @@ btnStart.addEventListener("click", () => command({ type: "start" }));
 btnStop.addEventListener("click", () => command({ type: "stop" }));
 
 // Reset needs a second click within 3s
-let resetConfirmTimer = null;
 function cancelResetConfirm() {
   clearTimeout(resetConfirmTimer);
   resetConfirmTimer = null;
@@ -231,17 +254,20 @@ document.addEventListener("keyup", (e) => {
   if (e.code === "Space" && e.target.tagName === "BUTTON") e.preventDefault();
 });
 
-// Show lock: disables reset, set time, speed and highlight controls
-function applyLock() {
-  const locked = lockEnabled.checked;
+// Show lock: disables reset, set time, speed and highlight controls on every
+// lead screen. It is part of the server state, and the server enforces it.
+function applyLock(locked) {
+  lockEnabled.checked = locked;
   lockable.disabled = locked;
   btnReset.disabled = locked;
   if (locked) cancelResetConfirm();
-  localStorage.setItem("timer-lead-locked", locked ? "1" : "");
 }
-lockEnabled.checked = !!localStorage.getItem("timer-lead-locked");
-lockEnabled.addEventListener("change", applyLock);
-applyLock();
+lockEnabled.addEventListener("change", () => {
+  const locked = lockEnabled.checked;
+  applyLock(locked);
+  if (!command({ type: "setLock", locked })) applyLock(!!lastState?.locked);
+});
+localStorage.removeItem("timer-lead-locked"); // Was a per-device setting
 
 // Connected screens
 const KNOWN_SCREENS_KEY = "timer-known-screens";
@@ -275,7 +301,7 @@ function renderScreens(clients) {
   const selfId = getClientId();
   const live = new Map();
   for (const c of clients) {
-    if (c.id === selfId || c.role !== "viewer") continue;
+    if (c.id === selfId) continue;
     // A device can briefly have two sockets while reconnecting; keep the freshest
     const prev = live.get(c.id);
     if (!prev || c.lastSeenAgoMs < prev.lastSeenAgoMs) live.set(c.id, c);
@@ -283,7 +309,7 @@ function renderScreens(clients) {
   for (const c of live.values()) {
     // Don't refresh lost sockets, or "Clear lost" would immediately re-add them
     if (c.lastSeenAgoMs >= LOST_AFTER) continue;
-    knownScreens.set(c.id, { name: c.name, lastSeenAt: now - c.lastSeenAgoMs });
+    knownScreens.set(c.id, { name: c.name, role: c.role, lastSeenAt: now - c.lastSeenAgoMs });
   }
   saveKnownScreens();
 
@@ -296,11 +322,13 @@ function renderScreens(clients) {
         health === "ok" ? (c.rtt != null ? `${Math.round(c.rtt)} ms` : "connected") :
         health === "warn" ? `quiet ${formatAgo(ago)}` :
         `lost ${formatAgo(ago)} ago`;
-      return { name: k.name, health, detail };
+      const role = k.role !== "lead" ? null : c && !c.authenticated ? "lead · signed out" : "lead";
+      return { name: k.name, role, health, detail };
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    // Other leads first, then viewers
+    .sort((a, b) => !a.role - !b.role || a.name.localeCompare(b.name));
 
-  screensList.replaceChildren(...rows.map(({ name, health, detail }) => {
+  screensList.replaceChildren(...rows.map(({ name, role, health, detail }) => {
     const li = document.createElement("li");
     li.className = `screen ${health}`;
     const dot = document.createElement("span");
@@ -311,7 +339,14 @@ function renderScreens(clients) {
     const info = document.createElement("span");
     info.className = "screen-detail";
     info.textContent = detail;
-    li.append(dot, label, info);
+    li.append(dot, label);
+    if (role) {
+      const tag = document.createElement("span");
+      tag.className = "screen-role";
+      tag.textContent = role;
+      li.append(tag);
+    }
+    li.append(info);
     return li;
   }));
   screensEmpty.classList.toggle("hidden", rows.length > 0);

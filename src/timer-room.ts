@@ -7,6 +7,7 @@ interface InternalState {
   accumulatedVirtualMs: number;
   startRealTimestamp: number | null;
   highlight: { interval: number; offset: number } | null;
+  locked: boolean;
 }
 
 interface Attachment {
@@ -28,6 +29,7 @@ const DEFAULT_STATE: InternalState = {
   accumulatedVirtualMs: DEFAULT_START_MS,
   startRealTimestamp: null,
   highlight: { interval: 10, offset: 0 },
+  locked: false,
 };
 
 // Auth throttle: each IP gets one password check per AUTH_INTERVAL_MS. Extra
@@ -67,6 +69,9 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+// Commands refused while the show lock is on (it applies to every lead screen)
+const LOCKED_COMMANDS = new Set(["reset", "setSpeed", "setTime", "setHighlight"]);
+
 export class TimerRoom extends DurableObject<Env> {
   private state: InternalState = { ...DEFAULT_STATE };
   // In-memory only: lost on hibernation, which only happens after the DO
@@ -101,6 +106,7 @@ export class TimerRoom extends DurableObject<Env> {
       if (stored) {
         this.state = stored;
         this.state.highlight = this.state.highlight ?? null;
+        this.state.locked = this.state.locked ?? false;
       }
       this.ctx.setWebSocketAutoResponse(
         new WebSocketRequestResponsePair("ping", "pong")
@@ -206,6 +212,11 @@ export class TimerRoom extends DurableObject<Env> {
       return;
     }
 
+    if (this.state.locked && LOCKED_COMMANDS.has(msg.type)) {
+      ws.send(JSON.stringify({ type: "error", message: "Show lock is on" }));
+      return;
+    }
+
     switch (msg.type) {
       case "start":
         if (!this.state.running) {
@@ -284,6 +295,12 @@ export class TimerRoom extends DurableObject<Env> {
         this.broadcast();
         break;
       }
+
+      case "setLock":
+        this.state.locked = msg.locked === true;
+        await this.persist();
+        this.broadcast();
+        break;
     }
   }
 
@@ -334,6 +351,7 @@ export class TimerRoom extends DurableObject<Env> {
       startRealTimestamp: this.state.startRealTimestamp,
       serverNow: Date.now(),
       highlight: this.state.highlight,
+      locked: this.state.locked,
     };
   }
 
@@ -343,7 +361,7 @@ export class TimerRoom extends DurableObject<Env> {
     for (const ws of this.ctx.getWebSockets()) {
       const a = ws.deserializeAttachment() as Attachment | null;
       if (!a?.id) continue;
-      clients.push({ id: a.id, name: a.name, role: a.role, rtt: a.rtt, lastSeenAgoMs: now - a.lastSeen });
+      clients.push({ id: a.id, name: a.name, role: a.role, authenticated: a.authenticated, rtt: a.rtt, lastSeenAgoMs: now - a.lastSeen });
     }
     return clients;
   }
