@@ -1,19 +1,32 @@
-import { connect } from "./websocket-client.js";
+import { connect, getClientName, setClientName } from "./websocket-client.js";
 import { updateState, initAnalogClock, initDisplay, startRenderLoop } from "./timer-display.js";
 import { initWakeLock } from "./wake-lock.js";
 import { initFullscreen } from "./fullscreen.js";
 import { initTheme } from "./theme.js";
+import { initOffline } from "./offline.js";
 
 initAnalogClock(document.getElementById("analog-clock"));
 initDisplay();
 initWakeLock();
 initFullscreen();
 initTheme();
+initOffline();
 
 const statusBar = document.getElementById("status-bar");
 const statusText = document.getElementById("status-text");
 const connectionDot = document.getElementById("connection-dot");
 const speedValue = document.getElementById("speed-value");
+const screenName = document.getElementById("screen-name");
+
+// Name shown in the lead's screens list. Set via ?name=Stage%20L or by tapping it.
+screenName.textContent = getClientName();
+screenName.addEventListener("click", () => {
+  const name = prompt("Name this screen (shown to the lead):", getClientName());
+  if (name?.trim()) {
+    setClientName(name.trim());
+    screenName.textContent = getClientName();
+  }
+});
 
 connect({
   onState: (state) => {
