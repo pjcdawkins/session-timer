@@ -39,6 +39,12 @@
   --digital-glow-faint: rgba(232, 168, 76, 0.05);
   --hover-tint: rgba(255, 255, 255, 0.05);
 
+  /* Count-in wash: colour, resting opacity, opacity at each beat */
+  --countdown-color: #e8a84c;
+  --countdown-go: #4cad6a;
+  --countdown-base: 0.18;
+  --countdown-peak: 0.45;
+
   color-scheme: dark;
 
   --font-mono: 'DM Mono', 'SF Mono', 'Cascadia Mono', monospace;
@@ -90,6 +96,11 @@
     --digital-glow-faint: rgba(192, 122, 38, 0.03);
     --hover-tint: rgba(0, 0, 0, 0.05);
 
+    --countdown-color: #f2a43a;
+    --countdown-go: #4cc070;
+    --countdown-base: 0.3;
+    --countdown-peak: 0.75;
+
     color-scheme: light;
   }
 }
@@ -131,6 +142,11 @@
   --clock-shadow: rgba(60, 45, 25, 0.12);
   --digital-glow-faint: rgba(192, 122, 38, 0.03);
   --hover-tint: rgba(0, 0, 0, 0.05);
+
+  --countdown-color: #f2a43a;
+  --countdown-go: #4cc070;
+  --countdown-base: 0.3;
+  --countdown-peak: 0.75;
 
   color-scheme: light;
 }
@@ -281,6 +297,53 @@ body::before {
 .center-dot {
   fill: var(--hand-second);
   filter: drop-shadow(0 0 3px var(--hand-second-glow));
+}
+
+/* ─── Count-in ─── */
+/* Driven by timer-display.js: html gets .countdown-counting (running, below
+   zero) or .countdown-go (first second after zero), and --countdown-pulse
+   goes 1 → 0 after each whole second. */
+#countdown-wash {
+  position: fixed;
+  inset: 0;
+  z-index: -1; /* above the page background, behind everything else */
+  pointer-events: none;
+  background: var(--countdown-color);
+  opacity: 0;
+}
+
+.countdown-counting #countdown-wash {
+  opacity: calc(var(--countdown-base) + (var(--countdown-peak) - var(--countdown-base)) * var(--countdown-pulse, 0));
+}
+
+.countdown-go #countdown-wash {
+  background: var(--countdown-go);
+  opacity: calc(var(--countdown-peak) * var(--countdown-pulse, 0));
+}
+
+.countdown-digit {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 120px;
+  font-weight: 400;
+  text-anchor: middle;
+  dominant-baseline: central;
+  fill: var(--amber);
+  opacity: calc(0.4 + 0.5 * var(--countdown-pulse, 0));
+}
+
+.countdown-counting .countdown-digit {
+  display: inline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .countdown-counting #countdown-wash {
+    opacity: var(--countdown-base);
+  }
+
+  .countdown-digit {
+    opacity: 0.7;
+  }
 }
 
 /* ─── Digital Clock ─── */

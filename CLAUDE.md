@@ -66,11 +66,11 @@ Two pages share common modules:
 
 Shared modules:
 - **`websocket-client.js`** — Connect, auto-reconnect with exponential backoff, clock offset calculation. Reports connection status as `"connected"`, `"reconnecting"`, or `"disconnected"` (after 3+ failed attempts)
-- **`timer-display.js`** — SVG analog clock (minute + second hands), digital HH:MM:SS display (with .t tenths below 1x), real-time corner display, 60fps render loop via requestAnimationFrame
+- **`timer-display.js`** — SVG analog clock (minute + second hands), digital HH:MM:SS display (with .t tenths below 1x), real-time corner display, 60fps render loop via requestAnimationFrame. Also the count-in cue: while running in the last 10s before zero, a full-page colour wash (`#countdown-wash`, themed via `--countdown-*` tokens) pulses on each whole second with the seconds remaining large on the clock face, then a green flash for the first second after zero. It is computed from the synced elapsed time each frame, so all screens pulse together.
 
 ### Auth
 
-Password sent over WebSocket, validated by the Durable Object (or local server) against `LEAD_PASSWORD` env var. The DO marks the socket attachment as authenticated. All commands (start/pause/reset/setSpeed/setTime) require an authenticated socket. Password stored in localStorage for auto-re-auth on reconnect and page reload. The lead can set a start time (including negative for countdown) while the timer is paused. The default start time (initial state and after Reset) is -3s, giving a count-in. Highlighting is on by default, every 10 seconds with offset 0.
+Password sent over WebSocket, validated by the Durable Object (or local server) against `LEAD_PASSWORD` env var. The DO marks the socket attachment as authenticated. All commands (start/pause/reset/setSpeed/setTime) require an authenticated socket. Password stored in localStorage for auto-re-auth on reconnect and page reload. The lead can set a start time (including negative for countdown) while the timer is paused. The default start time (initial state and after Reset) is -5s, giving a count-in. Highlighting is on by default, every 10 seconds with offset 0.
 
 Lead page safeguards: Space = Start (never toggles), Esc = Pause, Reset needs a second click within 3s, "Show lock" disables reset/set-time/speed/highlight (it is part of the timer state, so it applies to every lead screen, and the server refuses those commands while it is on), and a red banner shows if a command is attempted while disconnected. Perform mode (per screen, remembered in localStorage) hides the controls and enlarges the clocks, side by side in landscape; entering it turns on Show lock, exiting leaves the lock on, and the status bar shows a compact screens count.
 
