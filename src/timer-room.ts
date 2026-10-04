@@ -37,18 +37,27 @@ const AUTH_INTERVAL_MS = 2_000;
 const AUTH_MAX_WAIT_MS = 5_000;
 
 // Reconnect token: issued after a successful password check and accepted
-// without throttling (it's 256 bits, so not guessable). Derived from the
-// password, so it needs no storage and changing LEAD_PASSWORD revokes it.
-// This stops a client sharing the lead's IP from starving reconnects.
-const TOKEN_CONTEXT = "session-timer lead reconnect v1";
+// without throttling, so a client sharing the lead's IP can't starve
+// reconnects. It's 256 random bits (never derived from the password, or
+// password guesses could be submitted as tokens to dodge the throttle),
+// persisted in DO storage alongside an HMAC of the password keyed by the
+// token. If LEAD_PASSWORD changes the HMAC no longer matches, so a new token
+// is issued and old ones are revoked.
+interface StoredLeadToken {
+  token: string;
+  passwordCheck: string;
+}
 
-async function deriveLeadToken(password: string): Promise<string> {
+function toHex(buf: ArrayBuffer | Uint8Array): string {
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function passwordCheck(token: string, password: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
-    "raw", enc.encode(password), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+    "raw", enc.encode(token), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
   );
-  const mac = await crypto.subtle.sign("HMAC", key, enc.encode(TOKEN_CONTEXT));
-  return [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return toHex(await crypto.subtle.sign("HMAC", key, enc.encode(password)));
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -66,8 +75,22 @@ export class TimerRoom extends DurableObject<Env> {
   private leadToken: Promise<string> | null = null;
 
   private getLeadToken(): Promise<string> {
-    this.leadToken ??= deriveLeadToken(this.env.LEAD_PASSWORD);
+    this.leadToken ??= this.loadOrCreateLeadToken().catch((err) => {
+      this.leadToken = null; // Don't cache a failure
+      throw err;
+    });
     return this.leadToken;
+  }
+
+  private async loadOrCreateLeadToken(): Promise<string> {
+    const password = this.env.LEAD_PASSWORD;
+    const stored = await this.ctx.storage.get<StoredLeadToken>("leadToken");
+    if (stored && constantTimeEqual(stored.passwordCheck, await passwordCheck(stored.token, password))) {
+      return stored.token;
+    }
+    const token = toHex(crypto.getRandomValues(new Uint8Array(32)));
+    await this.ctx.storage.put("leadToken", { token, passwordCheck: await passwordCheck(token, password) });
+    return token;
   }
 
   constructor(ctx: DurableObjectState, env: Env) {

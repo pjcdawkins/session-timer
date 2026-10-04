@@ -13,6 +13,7 @@ const PORT = Number(process.env.PORT) || 8787;
 const LEAD_PASSWORD = process.env.LEAD_PASSWORD || "session";
 const PUBLIC_DIR = path.resolve(__dirname, "public");
 const STATE_FILE = process.env.STATE_FILE || path.resolve(__dirname, ".timer-state.json");
+const TOKEN_FILE = path.join(path.dirname(STATE_FILE), ".timer-lead-token.json");
 // Sockets silent for longer than this are dropped (clients ping every 2s)
 const CLIENT_TIMEOUT_MS = 15_000;
 
@@ -155,10 +156,28 @@ const authNextSlot = new Map();
 // Reconnect token (mirrors timer-room.ts): issued after a successful password
 // check and accepted without throttling, so a client sharing the lead's IP
 // can't starve reconnects. Changing LEAD_PASSWORD revokes it.
-const LEAD_TOKEN = crypto
-  .createHmac("sha256", LEAD_PASSWORD)
-  .update("session-timer lead reconnect v1")
-  .digest("hex");
+// It's 256 random bits (never derived from the password, or password guesses
+// could be submitted as tokens to dodge the throttle), persisted next to the
+// state file so it survives restarts, alongside an HMAC of the password keyed
+// by the token: if LEAD_PASSWORD changes, a new token is issued.
+const LEAD_TOKEN = loadOrCreateLeadToken();
+
+function loadOrCreateLeadToken() {
+  const check = (token) => crypto.createHmac("sha256", token).update(LEAD_PASSWORD).digest("hex");
+  try {
+    const stored = JSON.parse(fs.readFileSync(TOKEN_FILE, "utf8"));
+    if (typeof stored.token === "string" && stored.passwordCheck === check(stored.token)) return stored.token;
+  } catch (err) {
+    if (err.code !== "ENOENT") console.error(`Could not read ${TOKEN_FILE}:`, err.message);
+  }
+  const token = crypto.randomBytes(32).toString("hex");
+  try {
+    fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token, passwordCheck: check(token) }), { mode: 0o600 });
+  } catch (err) {
+    console.error(`Could not write ${TOKEN_FILE}:`, err.message);
+  }
+  return token;
+}
 
 function isLeadToken(token) {
   return typeof token === "string" && token.length === LEAD_TOKEN.length &&
