@@ -1294,13 +1294,21 @@ body:not(.perform) .perform-only {
 #screens-summary.warn #screens-summary-text { color: var(--amber); }
 #screens-summary.lost #screens-summary-text { color: var(--red); }
 
-#btn-perform-exit {
+/* Portrait: bottom centre, clear of the status bar and the corner displays.
+   Landscape (below): in the flow, centred under the digits. */
+#perform-actions {
   position: fixed;
-  /* Bottom centre: clear of the status bar and the corner displays */
   bottom: max(clamp(0.8rem, 2vw, 1.5rem), env(safe-area-inset-bottom));
   left: 50%;
-  transform: translateX(-50%);
+  translate: -50% 0;
   z-index: 300;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+#btn-perform-exit {
   height: 2rem;
   padding: 0 0.7rem;
   background: transparent;
@@ -1315,14 +1323,8 @@ body:not(.perform) .perform-only {
   cursor: pointer;
 }
 
-/* Above the exit button (beside it in landscape), and only while stopped:
-   lead.js hides it when running */
+/* Only while stopped: lead.js hides it when running */
 #btn-perform-start {
-  position: fixed;
-  bottom: calc(max(clamp(0.8rem, 2vw, 1.5rem), env(safe-area-inset-bottom)) + 2.75rem);
-  left: 50%;
-  translate: -50% 0;
-  z-index: 300;
   min-width: 9rem;
   padding: 0.8rem 1.6rem;
   background: rgba(76, 173, 106, 0.08);
@@ -1407,13 +1409,19 @@ body.perform .app.lead-app #digital-clock {
     font-size: min(7.5vw, 22svh);
   }
 
-  /* The clock reaches the bottom centre here, so sit to the right of the
-     exit button instead (clear of the real-time corner display) */
-  #btn-perform-start {
-    bottom: max(clamp(0.8rem, 2vw, 1.5rem), env(safe-area-inset-bottom));
-    left: calc(50% + 5rem);
+  body.perform .main-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Side by side under the digits; the fixed height keeps the digits from
+     moving when Start hides */
+  #perform-actions {
+    position: static;
     translate: none;
-    min-width: 7rem;
-    padding: 0.6rem 1.2rem;
+    flex-direction: row;
+    height: 2.6rem;
+    margin-top: 1.5rem;
   }
 }
