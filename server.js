@@ -183,9 +183,14 @@ function loadOrCreateLeadToken() {
   return token;
 }
 
+const LEAD_TOKEN_BUF = Buffer.from(LEAD_TOKEN);
+
 function isLeadToken(token) {
-  return typeof token === "string" && token.length === LEAD_TOKEN.length &&
-    crypto.timingSafeEqual(Buffer.from(token), Buffer.from(LEAD_TOKEN));
+  if (typeof token !== "string") return false;
+  // Compare byte lengths, not string lengths: timingSafeEqual throws on a
+  // mismatch, and a non-ASCII string can have the right length in characters
+  const buf = Buffer.from(token);
+  return buf.length === LEAD_TOKEN_BUF.length && crypto.timingSafeEqual(buf, LEAD_TOKEN_BUF);
 }
 
 /** Returns ms to wait before checking, or null if the wait would be too long. */
