@@ -55,11 +55,6 @@ export function initTheme() {
     update();
   });
 
-  // Safari < 14 only supports the deprecated addListener().
-  if (systemDark.addEventListener) {
-    systemDark.addEventListener("change", update);
-  } else {
-    systemDark.addListener(update);
-  }
+  systemDark.addEventListener("change", update);
   update();
 }
