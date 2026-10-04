@@ -245,7 +245,27 @@ describe("count-in cue", () => {
     expect(mode()).toBe("go");
   });
 
-  it("picks up mid count-in in step, e.g. after a reconnect", () => {
+  it("keeps the wash steady above 2x, so it never flashes more than 3 times a second", () => {
+    display.updateState(state({ running: true, speed: 4, startRealTimestamp: NOW }));
+    at(0);
+    expect(mode()).toBe("counting");
+    expect(digit()).toBe("5");
+    expect(pulse()).toBe(0);
+    at(250);
+    expect(digit()).toBe("4");
+    expect(pulse()).toBe(0);
+    at(1250);
+    expect(mode()).toBe("go");
+    expect(pulse()).toBe(1);
+  });
+
+  it("still pulses at 2x", () => {
+    display.updateState(state({ running: true, speed: 2, startRealTimestamp: NOW }));
+    at(500);
+    expect(pulse()).toBe(1);
+  });
+
+    it("picks up mid count-in in step, e.g. after a reconnect", () => {
     display.updateState(state({ running: true, startRealTimestamp: NOW - 2300 }));
     at(0);
     expect(mode()).toBe("counting");

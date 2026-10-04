@@ -66,7 +66,7 @@ Two pages share common modules:
 
 Shared modules:
 - **`websocket-client.js`** — Connect, auto-reconnect with exponential backoff, clock offset calculation. Reports connection status as `"connected"`, `"reconnecting"`, or `"disconnected"` (after 3+ failed attempts)
-- **`timer-display.js`** — SVG analog clock (minute + second hands), digital HH:MM:SS display (with .t tenths below 1x), real-time corner display, 60fps render loop via requestAnimationFrame. Also the count-in cue: while running in the last 10s before zero, a full-page colour wash (`#countdown-wash`, themed via `--countdown-*` tokens) pulses on each whole second with the seconds remaining large on the clock face, then a green flash for the first second after zero. It is computed from the synced elapsed time each frame, so all screens pulse together.
+- **`timer-display.js`** — SVG analog clock (minute + second hands), digital HH:MM:SS display (with .t tenths below 1x), real-time corner display, 60fps render loop via requestAnimationFrame. Also the count-in cue: while running in the last 10s before zero, a full-page colour wash (`#countdown-wash`, themed via `--countdown-*` tokens) pulses on each whole second (steady above 2x, to stay under 3 flashes/s) with the seconds remaining large on the clock face, then a green flash for the first second after zero. It is computed from the synced elapsed time each frame, so all screens pulse together.
 
 ### Auth
 

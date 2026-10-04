@@ -169,6 +169,12 @@ function renderAnalog(virtualMs) {
 const PULSE_DECAY = 0.6;
 /** The count-in cue covers at most the last 10 seconds of a longer countdown. */
 const COUNTDOWN_MAX_MS = 10_000;
+/**
+ * Pulses come once per virtual second, i.e. `speed` per real second. Above
+ * this speed the wash stays steady, keeping well under the WCAG limit of
+ * three flashes per second.
+ */
+const MAX_PULSE_SPEED = 2;
 
 /**
  * Count-in cue, so a start is noticeable from across a stage or desk.
@@ -189,6 +195,7 @@ function renderCountdown(virtualMs) {
     if (beat < 0) {
       mode = "counting";
       countdownDigit.textContent = String(-beat);
+      if (currentState.speed > MAX_PULSE_SPEED) pulse = 0;
     } else {
       mode = "go";
       pulse = (1 - phase) ** 2;
