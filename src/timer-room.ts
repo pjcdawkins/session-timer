@@ -9,10 +9,13 @@ interface InternalState {
   highlight: { interval: number; offset: number } | null;
 }
 
+// Default start time is -3s so there's a count-in
+const DEFAULT_START_MS = -3000;
+
 const DEFAULT_STATE: InternalState = {
   running: false,
-  speed: 1.15,
-  accumulatedVirtualMs: 0,
+  speed: 1.0,
+  accumulatedVirtualMs: DEFAULT_START_MS,
   startRealTimestamp: null,
   highlight: null,
 };
@@ -99,7 +102,7 @@ export class TimerRoom extends DurableObject<Env> {
 
       case "reset":
         this.state.running = false;
-        this.state.accumulatedVirtualMs = 0;
+        this.state.accumulatedVirtualMs = DEFAULT_START_MS;
         this.state.startRealTimestamp = null;
         await this.persist();
         this.broadcast();

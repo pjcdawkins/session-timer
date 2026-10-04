@@ -51,7 +51,7 @@
         <div class="set-time-inputs">
           <input type="number" id="time-minutes" min="0" max="59" value="0" placeholder="MM" aria-label="Minutes">
           <span>:</span>
-          <input type="number" id="time-seconds" min="-59" max="59" value="0" placeholder="SS" aria-label="Seconds (negative for countdown)">
+          <input type="number" id="time-seconds" min="-59" max="59" value="-3" placeholder="SS" aria-label="Seconds (negative for countdown)">
           <button id="btn-set-time" aria-label="Set start time">Set</button>
         </div>
       </div>
@@ -59,14 +59,14 @@
       <div class="speed-controls">
         <span class="speed-controls-label">Playback Speed</span>
         <div class="speed-presets">
-          <button data-speed="1.00">1.00x</button>
+          <button data-speed="1.00" class="active">1.00x</button>
           <button data-speed="1.05">1.05x</button>
           <button data-speed="1.10">1.10x</button>
-          <button data-speed="1.15" class="active">1.15x</button>
+          <button data-speed="1.15">1.15x</button>
           <button data-speed="1.20">1.20x</button>
         </div>
         <div class="speed-custom">
-          <input type="number" id="speed-input" min="0.1" max="10" step="0.01" value="1.15">
+          <input type="number" id="speed-input" min="0.1" max="10" step="0.01" value="1.00">
           <span>x</span>
         </div>
       </div>
@@ -87,7 +87,7 @@
     <div class="corner-footer">
       <div id="speed-display">
         <span id="speed-label">Speed</span>
-        <span id="speed-value">1.15x</span>
+        <span id="speed-value">1.00x</span>
       </div>
 
       <div id="real-time">

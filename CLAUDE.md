@@ -15,7 +15,7 @@ Secrets: `wrangler secret put LEAD_PASSWORD` sets the lead auth password. For Cl
 
 ## Architecture
 
-Shared timer web app for music sessions. One "lead" controls the timer; all other viewers see a synced read-only display. The timer runs at a configurable speed multiplier (default 1.15x) — the main display shows sped-up "virtual" time, a corner display shows real elapsed time.
+Shared timer web app for music sessions. One "lead" controls the timer; all other viewers see a synced read-only display. The timer runs at a configurable speed multiplier (default 1x) — the main display shows sped-up "virtual" time, a corner display shows real elapsed time.
 
 ### Backend: Two modes
 
@@ -55,7 +55,7 @@ Shared modules:
 
 ### Auth
 
-Password sent over WebSocket, validated by the Durable Object (or local server) against `LEAD_PASSWORD` env var. The DO marks the socket attachment as authenticated. All commands (start/pause/reset/setSpeed/setTime) require an authenticated socket. Password stored in localStorage for auto-re-auth on reconnect. The lead can set a start time (including negative for countdown) while the timer is paused.
+Password sent over WebSocket, validated by the Durable Object (or local server) against `LEAD_PASSWORD` env var. The DO marks the socket attachment as authenticated. All commands (start/pause/reset/setSpeed/setTime) require an authenticated socket. Password stored in localStorage for auto-re-auth on reconnect. The lead can set a start time (including negative for countdown) while the timer is paused. The default start time (initial state and after Reset) is -3s, giving a count-in.
 
 ## Deployment
 
