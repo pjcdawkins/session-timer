@@ -26,5 +26,5 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: "state"; state: TimerState }
-  | { type: "authResult"; success: boolean }
+  | { type: "authResult"; success: boolean; reason?: "rateLimited" }
   | { type: "error"; message: string };

@@ -85,13 +85,19 @@ connect({
       highlightOffset.value = state.highlight.offset;
     }
   },
-  onAuth: (success) => {
+  onAuth: (success, reason) => {
     if (success) {
       authenticated = true;
       authGate.classList.add("hidden");
       controls.classList.remove("hidden");
       loadQr();
+    } else if (reason === "rateLimited" && authenticated) {
+      // Re-auth after reconnect was throttled: retry quietly
+      setTimeout(() => send({ type: "auth", password: localStorage.getItem("timer-lead-pw") || "" }), 3000);
     } else {
+      authError.textContent = reason === "rateLimited"
+        ? "Too many attempts, try again in a few seconds"
+        : "Wrong password";
       authError.classList.remove("hidden");
       passwordInput.value = "";
       passwordInput.focus();

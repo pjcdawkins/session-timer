@@ -33,7 +33,7 @@ function doConnect() {
       const clockOffset = msg.state.serverNow - Date.now();
       onStateUpdate?.({ ...msg.state, clockOffset });
     } else if (msg.type === "authResult") {
-      onAuthResult?.(msg.success);
+      onAuthResult?.(msg.success, msg.reason);
     }
   };
 

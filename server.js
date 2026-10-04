@@ -92,8 +92,29 @@ const httpServer = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server: httpServer, path: "/ws", perMessageDeflate: false });
 
-/** @type {Map<import('ws').WebSocket, { authenticated: boolean }>} */
+/** @type {Map<import('ws').WebSocket, { authenticated: boolean, ip: string }>} */
 const clients = new Map();
+
+// Auth throttle (mirrors timer-room.ts): one password check per IP per
+// AUTH_INTERVAL_MS; extra attempts are held, or rejected if the wait would
+// exceed AUTH_MAX_WAIT_MS.
+const AUTH_INTERVAL_MS = 2_000;
+const AUTH_MAX_WAIT_MS = 5_000;
+/** @type {Map<string, number>} */
+const authNextSlot = new Map();
+
+/** Returns ms to wait before checking, or null if the wait would be too long. */
+function reserveAuthSlot(ip) {
+  const now = Date.now();
+  for (const [key, slot] of authNextSlot) {
+    if (slot <= now) authNextSlot.delete(key);
+  }
+  const slot = Math.max(now, authNextSlot.get(ip) ?? 0);
+  const wait = slot - now;
+  if (wait > AUTH_MAX_WAIT_MS) return null;
+  authNextSlot.set(ip, slot + AUTH_INTERVAL_MS);
+  return wait;
+}
 
 function broadcast() {
   const msg = JSON.stringify({ type: "state", state: buildTimerState() });
@@ -107,8 +128,9 @@ function broadcast() {
 // 30-second heartbeat (keeps clients in sync even with no activity)
 setInterval(broadcast, 30_000);
 
-wss.on("connection", (ws) => {
-  clients.set(ws, { authenticated: false });
+wss.on("connection", (ws, req) => {
+  const ip = req.socket.remoteAddress ?? "unknown";
+  clients.set(ws, { authenticated: false, ip });
 
   // Send current state immediately on connect
   ws.send(JSON.stringify({ type: "state", state: buildTimerState() }));
@@ -129,9 +151,17 @@ wss.on("connection", (ws) => {
     }
 
     if (msg.type === "auth") {
-      const success = msg.password === LEAD_PASSWORD;
-      clients.set(ws, { authenticated: success });
-      ws.send(JSON.stringify({ type: "authResult", success }));
+      const wait = reserveAuthSlot(ip);
+      if (wait === null) {
+        ws.send(JSON.stringify({ type: "authResult", success: false, reason: "rateLimited" }));
+        return;
+      }
+      setTimeout(() => {
+        if (ws.readyState !== ws.OPEN) return;
+        const success = msg.password === LEAD_PASSWORD;
+        clients.set(ws, { authenticated: success, ip });
+        ws.send(JSON.stringify({ type: "authResult", success }));
+      }, wait);
       return;
     }
 

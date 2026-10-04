@@ -17,8 +17,22 @@ const DEFAULT_STATE: InternalState = {
   highlight: null,
 };
 
+// Auth throttle: each IP gets one password check per AUTH_INTERVAL_MS. Extra
+// attempts are queued (held, then checked); if the queue wait would exceed
+// AUTH_MAX_WAIT_MS the attempt is rejected immediately.
+const AUTH_INTERVAL_MS = 2_000;
+const AUTH_MAX_WAIT_MS = 5_000;
+
+interface Attachment {
+  authenticated: boolean;
+  ip: string;
+}
+
 export class TimerRoom extends DurableObject<Env> {
   private state: InternalState = { ...DEFAULT_STATE };
+  // In-memory only: lost on hibernation, which only happens after the DO
+  // has been idle, by which point any reserved slots have expired anyway.
+  private authNextSlot = new Map<string, number>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -40,7 +54,8 @@ export class TimerRoom extends DurableObject<Env> {
     const [client, server] = Object.values(pair);
 
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ authenticated: false });
+    const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+    server.serializeAttachment({ authenticated: false, ip } satisfies Attachment);
 
     server.send(JSON.stringify({
       type: "state",
@@ -63,15 +78,27 @@ export class TimerRoom extends DurableObject<Env> {
       return;
     }
 
+    const attachment = ws.deserializeAttachment() as Attachment | null;
+
     if (msg.type === "auth") {
+      const ip = attachment?.ip ?? "unknown";
+      const wait = this.reserveAuthSlot(ip);
+      if (wait === null) {
+        ws.send(JSON.stringify({ type: "authResult", success: false, reason: "rateLimited" }));
+        return;
+      }
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
       const success = msg.password === this.env.LEAD_PASSWORD;
-      ws.serializeAttachment({ authenticated: success });
-      ws.send(JSON.stringify({ type: "authResult", success }));
+      try {
+        ws.serializeAttachment({ authenticated: success, ip } satisfies Attachment);
+        ws.send(JSON.stringify({ type: "authResult", success }));
+      } catch {
+        // Socket closed while waiting
+      }
       return;
     }
 
     // All other commands require authentication
-    const attachment = ws.deserializeAttachment() as { authenticated: boolean } | null;
     if (!attachment?.authenticated) {
       ws.send(JSON.stringify({ type: "error", message: "Not authenticated" }));
       return;
@@ -169,6 +196,19 @@ export class TimerRoom extends DurableObject<Env> {
   async alarm(): Promise<void> {
     this.broadcast();
     this.ensureHeartbeat();
+  }
+
+  /** Returns ms to wait before checking, or null if the wait would be too long. */
+  private reserveAuthSlot(ip: string): number | null {
+    const now = Date.now();
+    for (const [key, slot] of this.authNextSlot) {
+      if (slot <= now) this.authNextSlot.delete(key);
+    }
+    const slot = Math.max(now, this.authNextSlot.get(ip) ?? 0);
+    const wait = slot - now;
+    if (wait > AUTH_MAX_WAIT_MS) return null;
+    this.authNextSlot.set(ip, slot + AUTH_INTERVAL_MS);
+    return wait;
   }
 
   private accumulate(): void {
