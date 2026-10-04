@@ -72,7 +72,7 @@ Shared modules:
 
 Password sent over WebSocket, validated by the Durable Object (or local server) against `LEAD_PASSWORD` env var. The DO marks the socket attachment as authenticated. All commands (start/pause/reset/setSpeed/setTime) require an authenticated socket. Password stored in localStorage for auto-re-auth on reconnect and page reload. The lead can set a start time (including negative for countdown) while the timer is paused. The default start time (initial state and after Reset) is -3s, giving a count-in. Highlighting is on by default, every 10 seconds with offset 0.
 
-Lead page safeguards: Space = Start (never toggles), Esc = Pause, Reset needs a second click within 3s, "Show lock" disables reset/set-time/speed/highlight (it is part of the timer state, so it applies to every lead screen, and the server refuses those commands while it is on), and a red banner shows if a command is attempted while disconnected.
+Lead page safeguards: Space = Start (never toggles), Esc = Pause, Reset needs a second click within 3s, "Show lock" disables reset/set-time/speed/highlight (it is part of the timer state, so it applies to every lead screen, and the server refuses those commands while it is on), and a red banner shows if a command is attempted while disconnected. Perform mode (per screen, remembered in localStorage) hides the controls and enlarges the clocks, side by side in landscape; entering it turns on Show lock, exiting leaves the lock on, and the status bar shows a compact screens count.
 
 ### Offline caveats
 

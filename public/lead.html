@@ -35,7 +35,14 @@
     <div id="status-bar">
       <span class="dot" id="connection-dot"></span>
       <span id="status-text">STOPPED</span>
+      <span id="lock-indicator" class="perform-only hidden">Locked</span>
+      <span id="screens-summary" class="perform-only">
+        <span class="screen-dot"></span>
+        <span id="screens-summary-text">No screens</span>
+      </span>
     </div>
+
+    <button type="button" id="btn-perform-exit" class="perform-only" title="Show the controls">Exit perform mode</button>
 
     <div id="analog-clock"></div>
 
@@ -59,6 +66,8 @@
         </label>
         <span>Esc = Pause</span>
       </div>
+
+      <button type="button" id="btn-perform" title="Hide the controls and show the time large (also turns on Show lock)">Perform mode</button>
 
       <div id="screens-panel">
         <div class="screens-header">
