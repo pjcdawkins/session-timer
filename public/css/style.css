@@ -1197,6 +1197,15 @@ fieldset.lockable:disabled {
 
 .screen.lost .screen-name { color: var(--red); }
 
+.screen-role {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
 .screen-detail {
   font-family: var(--font-mono);
   font-size: 0.7rem;

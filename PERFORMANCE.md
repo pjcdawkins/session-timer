@@ -12,7 +12,7 @@
 
 - `npm run show` (auto-restarts the server, keeps the Mac awake, state survives restarts).
 - On mains power; disable automatic updates; Do Not Disturb on.
-- Lead page: `http://localhost:8787/lead`. Turn on **Show lock** once set up.
+- Lead page: `http://localhost:8787/lead`. Turn on **Show lock** once set up (it locks every lead screen, not just this one).
 - Space = Start, Esc = Pause. Reset needs two clicks.
 
 ## Stage screens
