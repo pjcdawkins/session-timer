@@ -3,11 +3,13 @@ import { updateState, initAnalogClock, initDisplay, startRenderLoop } from "./ti
 import { initWakeLock } from "./wake-lock.js";
 import { renderSVG } from "./vendor/uqr.js";
 import { initFullscreen } from "./fullscreen.js";
+import { initTheme } from "./theme.js";
 
 initAnalogClock(document.getElementById("analog-clock"));
 initDisplay();
 initWakeLock();
 initFullscreen();
+initTheme();
 
 const authGate = document.getElementById("auth-gate");
 const authError = document.getElementById("auth-error");
