@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+Requires Node 24 (`.nvmrc`; CI and deploy read it too).
+
 ```bash
 npm run local        # Local Node.js server (no internet) at http://localhost:8787
 npm run show         # Local server for performances: auto-restart loop + caffeinate
