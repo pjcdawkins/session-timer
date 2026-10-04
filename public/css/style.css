@@ -60,18 +60,18 @@
 
     --text-primary: #1d1a16;
     --text-secondary: #6b645b;
-    --text-muted: #9a9288;
+    --text-muted: #716a60;
 
-    --amber: #a8610f;
-    --amber-dim: #c07a26;
+    --amber: #94540d;
+    --amber-dim: #985c1b;
     --amber-glow: rgba(192, 122, 38, 0.15);
     --amber-glow-strong: rgba(192, 122, 38, 0.35);
 
-    --red: #bf3434;
+    --red: #a82e2e;
     --red-dim: #d98a8a;
     --red-glow: rgba(191, 52, 52, 0.25);
 
-    --green: #2a8146;
+    --green: #236d3b;
     --green-dim: #82c196;
     --green-glow: rgba(42, 129, 70, 0.25);
 
@@ -102,18 +102,18 @@
 
   --text-primary: #1d1a16;
   --text-secondary: #6b645b;
-  --text-muted: #9a9288;
+  --text-muted: #716a60;
 
-  --amber: #a8610f;
-  --amber-dim: #c07a26;
+  --amber: #94540d;
+  --amber-dim: #985c1b;
   --amber-glow: rgba(192, 122, 38, 0.15);
   --amber-glow-strong: rgba(192, 122, 38, 0.35);
 
-  --red: #bf3434;
+  --red: #a82e2e;
   --red-dim: #d98a8a;
   --red-glow: rgba(191, 52, 52, 0.25);
 
-  --green: #2a8146;
+  --green: #236d3b;
   --green-dim: #82c196;
   --green-glow: rgba(42, 129, 70, 0.25);
 
@@ -1007,6 +1007,8 @@ body::before {
 
 #btn-theme {
   right: 2.9rem;
+  /* Above the auth gate and QR modal so the theme can be changed there too */
+  z-index: 1001;
 }
 
 #btn-fullscreen:hover,
