@@ -1315,6 +1315,38 @@ body:not(.perform) .perform-only {
   cursor: pointer;
 }
 
+/* Above the exit button (beside it in landscape), and only while stopped:
+   lead.js hides it when running */
+#btn-perform-start {
+  position: fixed;
+  bottom: calc(max(clamp(0.8rem, 2vw, 1.5rem), env(safe-area-inset-bottom)) + 2.75rem);
+  left: 50%;
+  translate: -50% 0;
+  z-index: 300;
+  min-width: 9rem;
+  padding: 0.8rem 1.6rem;
+  background: rgba(76, 173, 106, 0.08);
+  border: 1px solid var(--green-dim);
+  border-radius: 8px;
+  color: var(--green);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-in-out);
+}
+
+#btn-perform-start:hover {
+  background: rgba(76, 173, 106, 0.18);
+  box-shadow: 0 0 20px var(--green-glow);
+}
+
+#btn-perform-start:active {
+  transform: scale(0.96);
+}
+
 #btn-perform-exit:hover {
   color: var(--text-primary);
   background: var(--hover-tint);
@@ -1373,5 +1405,15 @@ body.perform .app.lead-app #digital-clock {
 
   body.perform .app.lead-app #digital-clock {
     font-size: min(7.5vw, 22svh);
+  }
+
+  /* The clock reaches the bottom centre here, so sit to the right of the
+     exit button instead (clear of the real-time corner display) */
+  #btn-perform-start {
+    bottom: max(clamp(0.8rem, 2vw, 1.5rem), env(safe-area-inset-bottom));
+    left: calc(50% + 5rem);
+    translate: none;
+    min-width: 7rem;
+    padding: 0.6rem 1.2rem;
   }
 }

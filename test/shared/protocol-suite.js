@@ -384,9 +384,15 @@ export function defineProtocolTests(it) {
       lead.close();
     });
 
-    it("still allows start and pause while locked", async ({ backend }) => {
+    it("allows start but refuses pause while locked", async ({ backend }) => {
       const lead = await lockedLead(backend);
       lead.send({ type: "start" });
+      expect((await lead.next("state")).state.running).toBe(true);
+      lead.send({ type: "stop" });
+      expect(await lead.next("error")).toEqual({ type: "error", message: "Show lock is on" });
+      await lead.flush();
+      expect(lead.pending("state")).toEqual([]);
+      lead.send({ type: "setLock", locked: false });
       expect((await lead.next("state")).state.running).toBe(true);
       lead.send({ type: "stop" });
       expect((await lead.next("state")).state.running).toBe(false);
