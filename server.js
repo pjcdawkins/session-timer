@@ -22,12 +22,15 @@ let networkUrls = [];
 // Timer state (mirrors timer-room.ts InternalState)
 // ---------------------------------------------------------------------------
 
+// Default start time is -3s so there's a count-in
+const DEFAULT_START_MS = -3000;
+
 let state = {
   running: false,
-  speed: 1.15,
-  accumulatedVirtualMs: 0,
+  speed: 1.0,
+  accumulatedVirtualMs: DEFAULT_START_MS,
   startRealTimestamp: null,
-  highlight: null,
+  highlight: { interval: 10, offset: 0 },
 };
 
 // Persist state to disk so a crash/restart mid-performance resumes where it was.
@@ -229,7 +232,7 @@ wss.on("connection", (ws) => {
 
       case "reset":
         state.running = false;
-        state.accumulatedVirtualMs = 0;
+        state.accumulatedVirtualMs = DEFAULT_START_MS;
         state.startRealTimestamp = null;
         broadcast();
         break;
