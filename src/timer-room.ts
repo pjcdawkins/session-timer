@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import type { Env, ClientMessage, TimerState } from "./types";
+import type { Env, ClientMessage, ClientInfo, ClientRole, TimerState } from "./types";
 
 interface InternalState {
   running: boolean;
@@ -7,6 +7,15 @@ interface InternalState {
   accumulatedVirtualMs: number;
   startRealTimestamp: number | null;
   highlight: { interval: number; offset: number } | null;
+}
+
+interface Attachment {
+  authenticated: boolean;
+  id: string;
+  name: string;
+  role: ClientRole;
+  rtt: number | null;
+  lastSeen: number;
 }
 
 // Default start time is -3s so there's a count-in
@@ -43,7 +52,15 @@ export class TimerRoom extends DurableObject<Env> {
     const [client, server] = Object.values(pair);
 
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ authenticated: false });
+    const attachment: Attachment = {
+      authenticated: false,
+      id: "",
+      name: "",
+      role: "viewer",
+      rtt: null,
+      lastSeen: Date.now(),
+    };
+    server.serializeAttachment(attachment);
 
     server.send(JSON.stringify({
       type: "state",
@@ -66,16 +83,36 @@ export class TimerRoom extends DurableObject<Env> {
       return;
     }
 
+    const attachment = ws.deserializeAttachment() as Attachment;
+    attachment.lastSeen = Date.now();
+
+    if (msg.type === "hello") {
+      attachment.id = String(msg.id).slice(0, 32);
+      attachment.name = String(msg.name).slice(0, 40);
+      attachment.role = msg.role === "lead" ? "lead" : "viewer";
+      ws.serializeAttachment(attachment);
+      return;
+    }
+
+    if (msg.type === "ping") {
+      attachment.rtt = typeof msg.rtt === "number" ? msg.rtt : null;
+      ws.serializeAttachment(attachment);
+      ws.send(JSON.stringify({ type: "pong", t: msg.t, serverNow: Date.now() }));
+      if (attachment.authenticated) {
+        ws.send(JSON.stringify({ type: "clients", clients: this.listClients(), serverNow: Date.now() }));
+      }
+      return;
+    }
+
     if (msg.type === "auth") {
-      const success = msg.password === this.env.LEAD_PASSWORD;
-      ws.serializeAttachment({ authenticated: success });
-      ws.send(JSON.stringify({ type: "authResult", success }));
+      attachment.authenticated = msg.password === this.env.LEAD_PASSWORD;
+      ws.serializeAttachment(attachment);
+      ws.send(JSON.stringify({ type: "authResult", success: attachment.authenticated }));
       return;
     }
 
     // All other commands require authentication
-    const attachment = ws.deserializeAttachment() as { authenticated: boolean } | null;
-    if (!attachment?.authenticated) {
+    if (!attachment.authenticated) {
       ws.send(JSON.stringify({ type: "error", message: "Not authenticated" }));
       return;
     }
@@ -190,6 +227,17 @@ export class TimerRoom extends DurableObject<Env> {
       serverNow: Date.now(),
       highlight: this.state.highlight,
     };
+  }
+
+  private listClients(): ClientInfo[] {
+    const now = Date.now();
+    const clients: ClientInfo[] = [];
+    for (const ws of this.ctx.getWebSockets()) {
+      const a = ws.deserializeAttachment() as Attachment | null;
+      if (!a?.id) continue;
+      clients.push({ id: a.id, name: a.name, role: a.role, rtt: a.rtt, lastSeenAgoMs: now - a.lastSeen });
+    }
+    return clients;
   }
 
   private broadcast(): void {
