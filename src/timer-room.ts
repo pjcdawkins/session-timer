@@ -7,6 +7,7 @@ interface InternalState {
   accumulatedVirtualMs: number;
   startRealTimestamp: number | null;
   highlight: { interval: number; offset: number } | null;
+  locked: boolean;
 }
 
 interface Attachment {
@@ -27,7 +28,11 @@ const DEFAULT_STATE: InternalState = {
   accumulatedVirtualMs: DEFAULT_START_MS,
   startRealTimestamp: null,
   highlight: { interval: 10, offset: 0 },
+  locked: false,
 };
+
+// Commands refused while the show lock is on (it applies to every lead screen)
+const LOCKED_COMMANDS = new Set(["reset", "setSpeed", "setTime", "setHighlight"]);
 
 export class TimerRoom extends DurableObject<Env> {
   private state: InternalState = { ...DEFAULT_STATE };
@@ -40,6 +45,7 @@ export class TimerRoom extends DurableObject<Env> {
       if (stored) {
         this.state = stored;
         this.state.highlight = this.state.highlight ?? null;
+        this.state.locked = this.state.locked ?? false;
       }
       this.ctx.setWebSocketAutoResponse(
         new WebSocketRequestResponsePair("ping", "pong")
@@ -114,6 +120,11 @@ export class TimerRoom extends DurableObject<Env> {
     // All other commands require authentication
     if (!attachment.authenticated) {
       ws.send(JSON.stringify({ type: "error", message: "Not authenticated" }));
+      return;
+    }
+
+    if (this.state.locked && LOCKED_COMMANDS.has(msg.type)) {
+      ws.send(JSON.stringify({ type: "error", message: "Show lock is on" }));
       return;
     }
 
@@ -195,6 +206,12 @@ export class TimerRoom extends DurableObject<Env> {
         this.broadcast();
         break;
       }
+
+      case "setLock":
+        this.state.locked = msg.locked === true;
+        await this.persist();
+        this.broadcast();
+        break;
     }
   }
 
@@ -226,6 +243,7 @@ export class TimerRoom extends DurableObject<Env> {
       startRealTimestamp: this.state.startRealTimestamp,
       serverNow: Date.now(),
       highlight: this.state.highlight,
+      locked: this.state.locked,
     };
   }
 
@@ -235,7 +253,7 @@ export class TimerRoom extends DurableObject<Env> {
     for (const ws of this.ctx.getWebSockets()) {
       const a = ws.deserializeAttachment() as Attachment | null;
       if (!a?.id) continue;
-      clients.push({ id: a.id, name: a.name, role: a.role, rtt: a.rtt, lastSeenAgoMs: now - a.lastSeen });
+      clients.push({ id: a.id, name: a.name, role: a.role, authenticated: a.authenticated, rtt: a.rtt, lastSeenAgoMs: now - a.lastSeen });
     }
     return clients;
   }

@@ -44,7 +44,7 @@ Clock sync (`clock.js`): clients send `{type:"ping", t}` every 2s; the server re
 
 Liveness: if a client receives nothing for 6s it treats the socket as dead and reconnects (500ms → 2s backoff, 4s connect timeout), and reconnects immediately on visibilitychange/online/pageshow. The last state is saved to localStorage and restored on page load, so a reloaded screen resumes counting before it reconnects.
 
-Screens list: clients send `{type:"hello", id, name, role}` on connect (id is per-tab via sessionStorage; viewer name from `?name=` or tapping the name in the status bar). Authenticated leads receive `{type:"clients", ...}` with each ping reply.
+Screens list: clients send `{type:"hello", id, name, role}` on connect (id is per-tab via sessionStorage; viewer name from `?name=` or tapping the name in the status bar). Authenticated leads receive `{type:"clients", ...}` with each ping reply; the lead Screens panel lists viewers and other lead screens (tagged "lead", or "lead · signed out" if not authenticated).
 
 Speed changes while running: the server accumulates elapsed time at the old speed, then restarts with the new speed — no time is lost.
 
@@ -62,7 +62,7 @@ Shared modules:
 
 Password sent over WebSocket, validated by the Durable Object (or local server) against `LEAD_PASSWORD` env var. The DO marks the socket attachment as authenticated. All commands (start/pause/reset/setSpeed/setTime) require an authenticated socket. Password stored in localStorage for auto-re-auth on reconnect and page reload. The lead can set a start time (including negative for countdown) while the timer is paused. The default start time (initial state and after Reset) is -3s, giving a count-in. Highlighting is on by default, every 10 seconds with offset 0.
 
-Lead page safeguards: Space = Start (never toggles), Esc = Pause, Reset needs a second click within 3s, "Show lock" disables reset/set-time/speed/highlight, and a red banner shows if a command is attempted while disconnected.
+Lead page safeguards: Space = Start (never toggles), Esc = Pause, Reset needs a second click within 3s, "Show lock" disables reset/set-time/speed/highlight (it is part of the timer state, so it applies to every lead screen, and the server refuses those commands while it is on), and a red banner shows if a command is attempted while disconnected.
 
 ### Offline caveats
 
