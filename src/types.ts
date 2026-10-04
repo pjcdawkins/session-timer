@@ -28,7 +28,7 @@ export interface ClientInfo {
 export type ClientMessage =
   | { type: "hello"; id: string; name: string; role: ClientRole }
   | { type: "ping"; t: number; rtt: number | null }
-  | { type: "auth"; password: string }
+  | { type: "auth"; password?: string; token?: string }
   | { type: "start" }
   | { type: "stop" }
   | { type: "reset" }
@@ -40,5 +40,5 @@ export type ServerMessage =
   | { type: "state"; state: TimerState }
   | { type: "pong"; t: number; serverNow: number }
   | { type: "clients"; clients: ClientInfo[]; serverNow: number }
-  | { type: "authResult"; success: boolean; reason?: "rateLimited" }
+  | { type: "authResult"; success: boolean; reason?: "rateLimited"; token?: string }
   | { type: "error"; message: string };

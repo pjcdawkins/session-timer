@@ -6,6 +6,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
 
 const PORT = Number(process.env.PORT) || 8787;
@@ -151,6 +152,19 @@ const AUTH_MAX_WAIT_MS = 5_000;
 /** @type {Map<string, number>} */
 const authNextSlot = new Map();
 
+// Reconnect token (mirrors timer-room.ts): issued after a successful password
+// check and accepted without throttling, so a client sharing the lead's IP
+// can't starve reconnects. Changing LEAD_PASSWORD revokes it.
+const LEAD_TOKEN = crypto
+  .createHmac("sha256", LEAD_PASSWORD)
+  .update("session-timer lead reconnect v1")
+  .digest("hex");
+
+function isLeadToken(token) {
+  return typeof token === "string" && token.length === LEAD_TOKEN.length &&
+    crypto.timingSafeEqual(Buffer.from(token), Buffer.from(LEAD_TOKEN));
+}
+
 /** Returns ms to wait before checking, or null if the wait would be too long. */
 function reserveAuthSlot(ip) {
   const now = Date.now();
@@ -228,6 +242,16 @@ wss.on("connection", (ws, req) => {
       return;
     }
 
+    if (msg?.type === "auth" && typeof msg.token === "string") {
+      client.authenticated = isLeadToken(msg.token);
+      ws.send(JSON.stringify({
+        type: "authResult",
+        success: client.authenticated,
+        ...(client.authenticated && { token: LEAD_TOKEN }),
+      }));
+      return;
+    }
+
     if (msg?.type === "auth") {
       const wait = reserveAuthSlot(client.ip);
       if (wait === null) {
@@ -237,7 +261,11 @@ wss.on("connection", (ws, req) => {
       setTimeout(() => {
         if (ws.readyState !== ws.OPEN) return;
         client.authenticated = msg.password === LEAD_PASSWORD;
-        ws.send(JSON.stringify({ type: "authResult", success: client.authenticated }));
+        ws.send(JSON.stringify({
+          type: "authResult",
+          success: client.authenticated,
+          ...(client.authenticated && { token: LEAD_TOKEN }),
+        }));
       }, wait);
       return;
     }

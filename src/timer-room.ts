@@ -36,11 +36,39 @@ const DEFAULT_STATE: InternalState = {
 const AUTH_INTERVAL_MS = 2_000;
 const AUTH_MAX_WAIT_MS = 5_000;
 
+// Reconnect token: issued after a successful password check and accepted
+// without throttling (it's 256 bits, so not guessable). Derived from the
+// password, so it needs no storage and changing LEAD_PASSWORD revokes it.
+// This stops a client sharing the lead's IP from starving reconnects.
+const TOKEN_CONTEXT = "session-timer lead reconnect v1";
+
+async function deriveLeadToken(password: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(password), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, enc.encode(TOKEN_CONTEXT));
+  return [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 export class TimerRoom extends DurableObject<Env> {
   private state: InternalState = { ...DEFAULT_STATE };
   // In-memory only: lost on hibernation, which only happens after the DO
   // has been idle, by which point any reserved slots have expired anyway.
   private authNextSlot = new Map<string, number>();
+  private leadToken: Promise<string> | null = null;
+
+  private getLeadToken(): Promise<string> {
+    this.leadToken ??= deriveLeadToken(this.env.LEAD_PASSWORD);
+    return this.leadToken;
+  }
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -115,6 +143,20 @@ export class TimerRoom extends DurableObject<Env> {
       return;
     }
 
+    if (msg.type === "auth" && typeof msg.token === "string") {
+      const token = await this.getLeadToken();
+      const success = constantTimeEqual(msg.token, token);
+      try {
+        const current = ws.deserializeAttachment() as Attachment;
+        current.authenticated = success;
+        ws.serializeAttachment(current);
+        ws.send(JSON.stringify({ type: "authResult", success, ...(success && { token }) }));
+      } catch {
+        // Socket closed
+      }
+      return;
+    }
+
     if (msg.type === "auth") {
       const wait = this.reserveAuthSlot(attachment.ip);
       if (wait === null) {
@@ -127,7 +169,8 @@ export class TimerRoom extends DurableObject<Env> {
         const current = ws.deserializeAttachment() as Attachment;
         current.authenticated = msg.password === this.env.LEAD_PASSWORD;
         ws.serializeAttachment(current);
-        ws.send(JSON.stringify({ type: "authResult", success: current.authenticated }));
+        const token = current.authenticated ? await this.getLeadToken() : undefined;
+        ws.send(JSON.stringify({ type: "authResult", success: current.authenticated, token }));
       } catch {
         // Socket closed while waiting
       }

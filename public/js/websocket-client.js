@@ -118,7 +118,7 @@ function doConnect() {
     } else if (msg.type === "clients") {
       handlers.onClients?.(msg.clients, msg.serverNow);
     } else if (msg.type === "authResult") {
-      handlers.onAuth?.(msg.success, msg.reason);
+      handlers.onAuth?.(msg.success, msg.reason, msg.token);
     }
   };
 
