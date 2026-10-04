@@ -26,7 +26,7 @@ const DEFAULT_STATE: InternalState = {
   speed: 1.0,
   accumulatedVirtualMs: DEFAULT_START_MS,
   startRealTimestamp: null,
-  highlight: null,
+  highlight: { interval: 10, offset: 0 },
 };
 
 export class TimerRoom extends DurableObject<Env> {

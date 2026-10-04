@@ -30,7 +30,7 @@ let state = {
   speed: 1.0,
   accumulatedVirtualMs: DEFAULT_START_MS,
   startRealTimestamp: null,
-  highlight: null,
+  highlight: { interval: 10, offset: 0 },
 };
 
 // Persist state to disk so a crash/restart mid-performance resumes where it was.
