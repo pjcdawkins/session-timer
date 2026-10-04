@@ -4,13 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+Requires Node 24 (`.nvmrc`; CI and deploy read it too).
+
 ```bash
 npm run local        # Local Node.js server (no internet) at http://localhost:8787
 npm run show         # Local server for performances: auto-restart loop + caffeinate
 npm run dev          # Cloudflare dev server (Miniflare) at http://localhost:8787
 npm run deploy       # Deploy to Cloudflare Workers
-npm run typecheck    # TypeScript type check (no emit)
+npm run build        # Bundle the Worker without deploying (wrangler deploy --dry-run)
+npm run typecheck    # TypeScript type check (no emit), including worker tests
+npm run lint         # Biome lint (warnings fail); `npm run lint:fix` applies safe fixes
+npm test             # All tests (Vitest), ~6s
+npm run test:watch   # Vitest watch mode
+npx vitest run --project server    # One project: server | frontend | worker
+npx vitest run -t "setSpeed"       # Tests whose name matches
 ```
+
+Before committing, run `npm run lint && npm run typecheck && npm test`. CI runs these plus `npm run build`.
 
 Secrets: `wrangler secret put LEAD_PASSWORD` sets the lead auth password. For Cloudflare dev, use `.dev.vars`. For local mode, set `LEAD_PASSWORD` env var (default: `"session"`).
 
@@ -70,6 +80,22 @@ Lead page safeguards: Space = Start (never toggles), Esc = Pause, Reset needs a 
 
 See `PERFORMANCE.md` for the show-day setup checklist.
 
+## Tests
+
+Vitest with three projects (`vitest.config.mts`):
+
+- **`server`** (`test/node/`) — each test spawns its own `server.js` child process (free port, temp `STATE_FILE`) via a Vitest fixture, so these tests run concurrently. Talks to it over real WebSockets and HTTP. Also covers static file serving, path traversal, and state-file recovery.
+- **`worker`** (`test/worker/`) — runs `src/` inside workerd via `@cloudflare/vitest-pool-workers` (reads `wrangler.toml`; `LEAD_PASSWORD` is `test-password`). Also covers hibernation and the heartbeat alarm.
+- **`frontend`** (`test/frontend/`) — unit tests for `public/js` modules under happy-dom: clock sync, display rendering/highlighting, and the reconnect/liveness logic in `websocket-client.js` (with a fake `WebSocket` and fake timers).
+
+`test/shared/protocol-suite.js` is the WebSocket protocol spec. It takes a `test` extended with a per-test `backend` fixture (`connect`, `restart`, `password`) and runs against **both** backends, so `server.js` and `timer-room.ts` must behave identically — when changing the protocol, update both and add the test there. Password auth is throttled per IP (all test sockets share one), so the suite's `connectLead` uses the password once per test and the reconnect token after that; do the same in new tests rather than sending the password repeatedly.
+
+The server and worker tests bind local ports; in a sandbox that blocks local binding they fail with `listen EPERM`.
+
+## Linting
+
+Biome (`biome.json`), linter only — the formatter is disabled. `public/js/vendor/` and fonts are excluded. Two rules are off because they flag intentional CSS: duplicate properties (`100vh` then `100svh` fallbacks) and `!important`.
+
 ## Deployment
 
-Custom domain `timer.ligetiquartet.com` configured in `wrangler.toml`. GitHub Actions workflow (`.github/workflows/deploy.yml`) auto-deploys on push to main using `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets.
+Custom domain `timer.ligetiquartet.com` configured in `wrangler.toml`. GitHub Actions: `.github/workflows/ci.yml` runs lint, typecheck, tests and a dry-run Worker build on pull requests. `.github/workflows/deploy.yml` runs that same CI on push to main and only deploys if it passes, using `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets.

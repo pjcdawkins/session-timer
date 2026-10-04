@@ -272,7 +272,7 @@ localStorage.removeItem("timer-lead-locked"); // Was a per-device setting
 // Connected screens
 const KNOWN_SCREENS_KEY = "timer-known-screens";
 const LOST_AFTER = 10000;
-let knownScreens = loadKnownScreens(); // id → { name, lastSeenAt }
+const knownScreens = loadKnownScreens(); // id → { name, lastSeenAt }
 
 function loadKnownScreens() {
   try {
