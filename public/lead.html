@@ -27,7 +27,7 @@
       <h2>Scan to Join</h2>
       <div id="qr-svg-container"></div>
       <span id="qr-url-text"></span>
-      <button id="qr-close">Close</button>
+      <button type="button" id="qr-close">Close</button>
     </div>
   </div>
 
@@ -47,9 +47,9 @@
 
     <div id="controls" class="hidden">
       <div class="transport">
-        <button id="btn-start" title="Space">Start</button>
-        <button id="btn-stop" disabled title="Esc">Pause</button>
-        <button id="btn-reset">Reset</button>
+        <button type="button" id="btn-start" title="Space">Start</button>
+        <button type="button" id="btn-stop" disabled title="Esc">Pause</button>
+        <button type="button" id="btn-reset">Reset</button>
       </div>
       <div class="transport-hints">
         <span>Space = Start</span>
@@ -63,7 +63,7 @@
       <div id="screens-panel">
         <div class="screens-header">
           <span class="screens-label">Screens</span>
-          <button id="btn-screens-clear" title="Forget screens that are no longer connected">Clear lost</button>
+          <button type="button" id="btn-screens-clear" title="Forget screens that are no longer connected">Clear lost</button>
         </div>
         <ul id="screens-list"></ul>
         <span id="screens-empty">No screens connected</span>
@@ -76,18 +76,18 @@
             <input type="number" id="time-minutes" min="0" max="59" value="0" placeholder="MM" aria-label="Minutes">
             <span>:</span>
             <input type="number" id="time-seconds" min="-59" max="59" value="-3" placeholder="SS" aria-label="Seconds (negative for countdown)">
-            <button id="btn-set-time" aria-label="Set start time">Set</button>
+            <button type="button" id="btn-set-time" aria-label="Set start time">Set</button>
           </div>
         </div>
 
         <div class="speed-controls">
           <span class="speed-controls-label">Playback Speed</span>
           <div class="speed-presets">
-            <button data-speed="1.00" class="active">1.00x</button>
-            <button data-speed="1.05">1.05x</button>
-            <button data-speed="1.10">1.10x</button>
-            <button data-speed="1.15">1.15x</button>
-            <button data-speed="1.20">1.20x</button>
+            <button type="button" data-speed="1.00" class="active">1.00x</button>
+            <button type="button" data-speed="1.05">1.05x</button>
+            <button type="button" data-speed="1.10">1.10x</button>
+            <button type="button" data-speed="1.15">1.15x</button>
+            <button type="button" data-speed="1.20">1.20x</button>
           </div>
           <div class="speed-custom">
             <input type="number" id="speed-input" min="0.1" max="10" step="0.01" value="1.00">
@@ -106,7 +106,7 @@
         </div>
       </fieldset>
 
-      <button id="btn-qr" class="hidden">Share QR Code</button>
+      <button type="button" id="btn-qr" class="hidden">Share QR Code</button>
     </div>
 
     <div class="corner-footer">

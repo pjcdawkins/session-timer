@@ -3,10 +3,10 @@
 // Run with: node server.js (or: npm run local)
 // Then open http://<your-ip>:8787 on any device in the room.
 
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+const http = require("node:http");
+const fs = require("node:fs");
+const path = require("node:path");
+const crypto = require("node:crypto");
 const { WebSocketServer } = require("ws");
 
 const PORT = Number(process.env.PORT) || 8787;
@@ -18,7 +18,7 @@ const TOKEN_FILE = path.join(path.dirname(STATE_FILE), ".timer-lead-token.json")
 const CLIENT_TIMEOUT_MS = 15_000;
 
 // Populated at startup — exposed via /api/info for the QR modal
-let networkUrls = [];
+const networkUrls = [];
 
 // ---------------------------------------------------------------------------
 // Timer state (mirrors timer-room.ts InternalState)
@@ -53,7 +53,7 @@ function loadState() {
 
 function saveState() {
   try {
-    const tmp = STATE_FILE + ".tmp";
+    const tmp = `${STATE_FILE}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(state));
     fs.renameSync(tmp, STATE_FILE);
   } catch (err) {
@@ -106,7 +106,7 @@ const httpServer = http.createServer((req, res) => {
   if (urlPath === "/" || urlPath === "") urlPath = "/index.html";
 
   // Safety: prevent path traversal
-  const resolved = path.resolve(PUBLIC_DIR, "." + urlPath);
+  const resolved = path.resolve(PUBLIC_DIR, `.${urlPath}`);
   if (!resolved.startsWith(PUBLIC_DIR + path.sep) && resolved !== PUBLIC_DIR) {
     res.writeHead(403);
     res.end("Forbidden");
@@ -411,7 +411,7 @@ httpServer.on("error", (err) => {
 });
 
 httpServer.listen(PORT, "0.0.0.0", () => {
-  const { networkInterfaces } = require("os");
+  const { networkInterfaces } = require("node:os");
   const nets = networkInterfaces();
 
   // Collect non-loopback IPv4 addresses

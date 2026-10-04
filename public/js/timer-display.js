@@ -6,8 +6,8 @@ let minuteHand = null;
 let digitalEl = null;
 let realTimeEl = null;
 let realTimeContainer = null;
-let ticks = [];
-let lastHighlight = undefined;
+const ticks = [];
+let lastHighlight;
 
 export function updateState(state) {
   currentState = state;

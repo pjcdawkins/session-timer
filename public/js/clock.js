@@ -8,7 +8,7 @@
 
 const WINDOW = 10;
 
-let samples = [];
+const samples = [];
 let fallbackOffset = 0;
 let best = null;
 
