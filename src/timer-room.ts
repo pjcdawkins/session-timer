@@ -237,12 +237,18 @@ export class TimerRoom extends DurableObject<Env> {
   /** Returns ms to wait before checking, or null if the wait would be too long. */
   private reserveAuthSlot(ip: string): number | null {
     const now = Date.now();
+    // Entries are re-inserted on every reservation, so the map is roughly
+    // ordered by expiry: drop expired entries from the front and stop at the
+    // first live one (O(1) amortized). Any expired entry left behind is
+    // harmless, and is removed once the entries ahead of it expire.
     for (const [key, slot] of this.authNextSlot) {
-      if (slot <= now) this.authNextSlot.delete(key);
+      if (slot > now) break;
+      this.authNextSlot.delete(key);
     }
     const slot = Math.max(now, this.authNextSlot.get(ip) ?? 0);
     const wait = slot - now;
     if (wait > AUTH_MAX_WAIT_MS) return null;
+    this.authNextSlot.delete(ip);
     this.authNextSlot.set(ip, slot + AUTH_INTERVAL_MS);
     return wait;
   }
