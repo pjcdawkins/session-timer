@@ -147,6 +147,8 @@ const QLAB_REPLY_TIMEOUT_MS = 1500;
 /**
  * Talks to QLab over TCP (so we get replies and can check the cue exists).
  * If TCP is down when a cue must fire, falls back to UDP to the same port.
+ * QLab authorises a passcode per connection, and for UDP per sending socket,
+ * so the UDP socket sends /connect too and keeps it fresh, ready for that.
  */
 class QLabLink {
   constructor({ host, port, path, workspace, passcode, log }) {
@@ -156,8 +158,24 @@ class QLabLink {
     this.pending = new Map(); // reply address → [resolve]
     this.lastStatus = null;
     this.stopped = false;
+    this.udp = dgram.createSocket("udp4");
+    this.udp.on("error", (err) => this.log(`UDP socket error: ${err.message}`));
     this.connect();
-    this.checkTimer = setInterval(() => this.check(), QLAB_CHECK_INTERVAL_MS);
+    this.udpConnect();
+    this.checkTimer = setInterval(() => {
+      this.check();
+      this.udpConnect();
+    }, QLAB_CHECK_INTERVAL_MS);
+  }
+
+  connectAddress() {
+    return `${this.workspace != null ? `/workspace/${this.workspace}` : ""}/connect`;
+  }
+
+  /** Authorise the UDP fallback socket with the passcode (QLab replies to port 53001, which we don't need). */
+  udpConnect() {
+    if (this.passcode == null || this.stopped) return;
+    this.udp.send(encodeOsc(this.connectAddress(), [this.passcode]), this.port, this.host);
   }
 
   connect() {
@@ -168,8 +186,7 @@ class QLabLink {
     socket.on("connect", async () => {
       this.connected = true;
       if (this.passcode != null) {
-        const prefix = this.workspace != null ? `/workspace/${this.workspace}` : "";
-        const reply = await this.request(`${prefix}/connect`, [this.passcode]);
+        const reply = await this.request(this.connectAddress(), [this.passcode]);
         if (reply && reply.status !== "ok") this.log(`QLab refused the passcode (${reply.status}${reply.data ? `: ${reply.data}` : ""})`);
       }
       // So that /start replies too, confirming the cue started
@@ -261,10 +278,6 @@ class QLabLink {
       const reply = await this.request(address);
       return reply?.status ?? "no reply";
     }
-    if (!this.udp) {
-      this.udp = dgram.createSocket("udp4");
-      this.udp.on("error", (err) => this.log(`UDP socket error: ${err.message}`));
-    }
     return new Promise((resolve) => {
       this.udp.send(encodeOsc(address), this.port, this.host, (err) => {
         resolve(err ? `UDP send failed (TCP was down): ${err.message}` : "sent over UDP (TCP was down)");
@@ -276,7 +289,7 @@ class QLabLink {
     this.stopped = true;
     clearInterval(this.checkTimer);
     this.socket?.destroy();
-    this.udp?.close();
+    this.udp.close();
   }
 }
 
@@ -290,6 +303,8 @@ const RECONNECT_DELAY = 1000;
 const CLOCK_WINDOW = 10;
 // Sleep with a timer until this close to zero, then spin for sub-ms precision
 const SPIN_MS = 20;
+// A clock correction while armed that puts zero this far in the past still fires
+const LATE_CORRECTION_MS = 50;
 
 /**
  * Server time at which a running timer reaches virtual zero, or null if it
@@ -344,6 +359,7 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
   let timer = null;
   let generation = 0; // bumped on every (re)arm, so an older spin loop stops
   let armedFor = null; // server time of the zero we're waiting for
+  let armedKey = null; // and the run it belongs to
   let firedKey = null; // run (start time + position + speed) we've already fired for
 
   const best = () => (samples.length ? samples.reduce((a, b) => (b.rtt < a.rtt ? b : a)) : null);
@@ -424,6 +440,7 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
     clearTimeout(timer);
     timer = null;
     armedFor = null;
+    armedKey = null;
   }
 
   /** (Re)arm for the next zero from the current state and clock offset. */
@@ -438,8 +455,8 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
     // Local time of zero, as a performance.now() value
     const localTarget = target - offset();
     const delay = localTarget - Date.now();
-    if (delay <= 0 && armedFor != null) {
-      // A clock update in the last moments moved zero just into the past
+    if (delay <= 0 && armedKey === key && delay > -LATE_CORRECTION_MS) {
+      // A clock update for this same run moved zero just into the past
       fire(key, performance.now() + delay);
       return;
     }
@@ -455,6 +472,7 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
     clearTimeout(timer);
     const mine = ++generation;
     armedFor = target;
+    armedKey = key;
     if (!wasArmed) log(`Armed: ${label} fires in ${(delay / 1000).toFixed(2)} s`);
 
     const spin = () => {

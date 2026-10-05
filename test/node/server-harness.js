@@ -64,7 +64,8 @@ export async function startServer({ stateFile, port, password = PASSWORD, env = 
     },
 
     stop() {
-      if (child.exitCode !== null) return Promise.resolve();
+      // A killed process has a signalCode and no exitCode
+      if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
       return new Promise((resolve) => {
         child.once("exit", resolve);
         child.kill("SIGKILL");

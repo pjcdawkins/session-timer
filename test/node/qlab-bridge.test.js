@@ -262,6 +262,45 @@ describe.concurrent("bridge", () => {
     expect(qlab.starts()).toHaveLength(0);
   });
 
+  it("never fires late for a new run that passed zero while it was disconnected", async ({ server, qlab, logs }) => {
+    const b = createBridge({ server: server.baseUrl, cue: "2", qlabPort: qlab.port, log: (m) => logs.push(m) });
+    try {
+      await ready(logs);
+      let lead = await server.connect();
+      lead.send({ type: "auth", password: PASSWORD });
+      await lead.next("authResult");
+      lead.send({ type: "setTime", virtualMs: -10_000 });
+      await lead.flush();
+      lead.send({ type: "start" });
+      await waitFor(() => logs.some((l) => l.startsWith("Armed")));
+      lead.close();
+
+      // The server goes away; while the bridge is disconnected, a new short run passes zero
+      await server.stop();
+      await waitFor(() => logs.some((l) => l.startsWith("Lost the timer")));
+      const restarted = await startServer({ port: server.port, stateFile: server.stateFile });
+      try {
+        lead = await restarted.connect();
+        lead.send({ type: "auth", password: PASSWORD });
+        await lead.next("authResult");
+        lead.send({ type: "reset" });
+        lead.send({ type: "setTime", virtualMs: -50 });
+        await lead.flush();
+        lead.send({ type: "start" });
+        const { state } = await lead.next((m) => m.type === "state" && m.state.running);
+        await waitFor(() => logs.filter((l) => l.startsWith("Connected")).length >= 2);
+        await sleep(300);
+        // Either it reconnected in time and fired at zero, or it didn't fire at all
+        for (const s of qlab.starts()) expect(Math.abs(s.at - zeroAt(state))).toBeLessThan(25);
+        lead.close();
+      } finally {
+        await restarted.stop();
+      }
+    } finally {
+      b.stop();
+    }
+  });
+
   it("says when the cue isn't in QLab", async ({ bridgeFor, logs }) => {
     bridgeFor({ cue: "9" });
     await waitFor(() => logs.some((l) => l.includes("can't find /cue/9")));
@@ -290,14 +329,21 @@ describe.concurrent("bridge", () => {
     }
   });
 
-  it("falls back to UDP when QLab's TCP port is down", async ({ server, lead, logs }) => {
+  it("falls back to UDP when QLab's TCP port is down, authorised by the passcode", async ({ server, lead, logs }) => {
     const dgram = await import("node:dgram");
     const udp = dgram.createSocket("udp4");
     const got = [];
-    udp.on("message", (m) => got.push(decodeOsc(m)));
+    // Like QLab: a passcode sent over UDP authorises later messages from that socket
+    const authorised = new Set();
+    udp.on("message", (m, rinfo) => {
+      const msg = decodeOsc(m);
+      const from = `${rinfo.address}:${rinfo.port}`;
+      if (msg.address === "/connect" && msg.args[0] === "1234") authorised.add(from);
+      else if (authorised.has(from)) got.push(msg);
+    });
     await new Promise((r) => udp.bind(0, "127.0.0.1", r));
     // Nothing listens on this TCP port, only UDP
-    const b = createBridge({ server: server.baseUrl, cue: "2", qlabPort: udp.address().port, log: (m) => logs.push(m) });
+    const b = createBridge({ server: server.baseUrl, cue: "2", qlabPort: udp.address().port, passcode: "1234", log: (m) => logs.push(m) });
     try {
       await waitFor(() => logs.some((l) => l.startsWith("QLab not reachable")) && logs.some((l) => l.startsWith("Connected")));
       lead.send({ type: "setTime", virtualMs: -300 });
@@ -305,6 +351,8 @@ describe.concurrent("bridge", () => {
       lead.send({ type: "start" });
       await waitFor(() => got.length > 0);
       expect(got[0].address).toBe("/cue/2/start");
+      await waitFor(() => logs.some((l) => l.startsWith("Fired")));
+      expect(logs.find((l) => l.startsWith("Fired"))).toMatch(/sent over UDP/);
     } finally {
       b.stop();
       udp.close();
