@@ -85,9 +85,16 @@ function storedCredential() {
   return password ? { password } : null;
 }
 
-function sendAuth(credential) {
+// Whether the auth in flight is a password typed into the gate, as opposed to
+// the saved credential (whose rejection usually means the login expired)
+let authFromForm = false;
+
+function sendAuth(credential, fromForm = false) {
   if (authPending || !credential) return;
-  if (send({ type: "auth", ...credential })) authPending = true;
+  if (send({ type: "auth", ...credential })) {
+    authPending = true;
+    authFromForm = fromForm;
+  }
 }
 let qrLoaded = false;
 let running = false;
@@ -152,7 +159,7 @@ connect({
       setSignedIn(false);
       authError.textContent = reason === "rateLimited"
         ? "Too many attempts, try again in a few seconds"
-        : "Wrong password";
+        : authFromForm ? "Wrong password" : "Signed out — enter the password again";
       authError.classList.remove("hidden");
       passwordInput.value = "";
       passwordInput.focus();
@@ -184,7 +191,7 @@ startRenderLoop();
 // Auth form
 document.getElementById("auth-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  sendAuth({ password: passwordInput.value });
+  sendAuth({ password: passwordInput.value }, true);
 });
 
 // A login lasts 24h from its last use, so renew it while the page is open:

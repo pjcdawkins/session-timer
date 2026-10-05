@@ -139,7 +139,7 @@ const wss = new WebSocketServer({ server: httpServer, path: "/ws", perMessageDef
 // Server-level errors (e.g. port in use) are re-emitted here; the httpServer handler below deals with them
 wss.on("error", () => {});
 
-/** @type {Map<import('ws').WebSocket, { authenticated: boolean, ip: string, id: string, name: string, role: string, rtt: number | null, lastSeen: number }>} */
+/** @type {Map<import('ws').WebSocket, { authenticated: boolean, logouts: number, ip: string, id: string, name: string, role: string, rtt: number | null, lastSeen: number }>} */
 const clients = new Map();
 
 function listClients() {
@@ -252,7 +252,9 @@ setInterval(() => {
 }, 5_000);
 
 wss.on("connection", (ws, req) => {
-  const client = { authenticated: false, ip: req.socket.remoteAddress ?? "unknown", id: "", name: "", role: "viewer", rtt: null, lastSeen: Date.now() };
+  // logouts is bumped by logout, so a throttled password check still queued
+  // can't sign the socket back in when it runs
+  const client = { authenticated: false, logouts: 0, ip: req.socket.remoteAddress ?? "unknown", id: "", name: "", role: "viewer", rtt: null, lastSeen: Date.now() };
   clients.set(ws, client);
 
   // Send current state immediately on connect
@@ -299,6 +301,7 @@ wss.on("connection", (ws, req) => {
     // (the client forgets it); changing LEAD_PASSWORD revokes every token.
     if (msg?.type === "logout") {
       client.authenticated = false;
+      client.logouts++;
       return;
     }
 
@@ -308,8 +311,9 @@ wss.on("connection", (ws, req) => {
         ws.send(JSON.stringify({ type: "authResult", success: false, reason: "rateLimited" }));
         return;
       }
+      const logouts = client.logouts;
       setTimeout(() => {
-        if (ws.readyState !== ws.OPEN) return;
+        if (ws.readyState !== ws.OPEN || client.logouts !== logouts) return;
         client.authenticated = msg.password === LEAD_PASSWORD;
         ws.send(JSON.stringify({
           type: "authResult",

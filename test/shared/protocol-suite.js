@@ -104,6 +104,22 @@ export function defineProtocolTests(it) {
       c.close();
     });
 
+    it("logout cancels a password check still held by the throttle", async ({ backend }) => {
+      const c = await backend.connect();
+      await c.next("state");
+      // The wrong password takes the first slot, so the right one is held ~2s
+      c.send({ type: "auth", password: "wrong" });
+      c.send({ type: "auth", password: backend.password });
+      await c.next("authResult");
+      c.send({ type: "logout" });
+      await sleep(2500);
+      c.send({ type: "start" });
+      expect(await c.next("error")).toEqual({ type: "error", message: "Not authenticated" });
+      // The cancelled check sends no result
+      expect(c.pending("authResult")).toEqual([]);
+      c.close();
+    });
+
     it("logout doesn't affect other lead sockets", async ({ backend }) => {
       const a = await connectLead(backend);
       const b = await connectLead(backend);

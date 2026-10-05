@@ -12,6 +12,9 @@ interface InternalState {
 
 interface Attachment {
   authenticated: boolean;
+  // Bumped by logout, so an auth check that was in flight (throttled, or
+  // awaiting crypto) can't sign the socket back in when it finishes
+  logouts: number;
   ip: string;
   id: string;
   name: string;
@@ -142,6 +145,7 @@ export class TimerRoom extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
     const attachment: Attachment = {
       authenticated: false,
+      logouts: 0,
       ip: request.headers.get("CF-Connecting-IP") ?? "unknown",
       id: "",
       name: "",
@@ -194,10 +198,12 @@ export class TimerRoom extends DurableObject<Env> {
     }
 
     if (msg.type === "auth" && typeof msg.token === "string") {
+      const logouts = attachment.logouts ?? 0;
       const success = await this.isLeadToken(msg.token);
       const token = success ? await this.issueLeadToken() : undefined;
       try {
         const current = ws.deserializeAttachment() as Attachment;
+        if ((current.logouts ?? 0) !== logouts) return; // Signed out meanwhile
         current.authenticated = success;
         ws.serializeAttachment(current);
         ws.send(JSON.stringify({ type: "authResult", success, token }));
@@ -211,6 +217,7 @@ export class TimerRoom extends DurableObject<Env> {
     // (the client forgets it); changing LEAD_PASSWORD revokes every token.
     if (msg.type === "logout") {
       attachment.authenticated = false;
+      attachment.logouts = (attachment.logouts ?? 0) + 1;
       ws.serializeAttachment(attachment);
       return;
     }
@@ -221,10 +228,12 @@ export class TimerRoom extends DurableObject<Env> {
         ws.send(JSON.stringify({ type: "authResult", success: false, reason: "rateLimited" }));
         return;
       }
+      const logouts = attachment.logouts ?? 0;
       if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
       try {
         // Re-read: hello/ping may have updated the attachment while we waited
         const current = ws.deserializeAttachment() as Attachment;
+        if ((current.logouts ?? 0) !== logouts) return; // Signed out meanwhile
         current.authenticated = msg.password === this.env.LEAD_PASSWORD;
         ws.serializeAttachment(current);
         const token = current.authenticated ? await this.issueLeadToken() : undefined;
