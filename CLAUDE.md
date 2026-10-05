@@ -9,6 +9,7 @@ Requires Node 24 (`.nvmrc`; CI and deploy read it too).
 ```bash
 npm run local        # Local Node.js server (no internet) at http://localhost:8787
 npm run show         # Local server for performances: auto-restart loop + caffeinate
+npm run qlab -- --cue 2   # QLab bridge: fire QLab cue 2 at zero (see --help)
 npm run dev          # Cloudflare dev server (Miniflare) at http://localhost:8787
 npm run deploy       # Deploy to Cloudflare Workers
 npm run build        # Bundle the Worker without deploying (wrangler deploy --dry-run)
@@ -74,6 +75,10 @@ Password sent over WebSocket, validated by the Durable Object (or local server) 
 
 Lead page safeguards: Space = Start (never toggles), Esc = Pause, Reset needs a second click within 3s, "Show lock" disables pause/reset/set-time/speed/highlight, leaving only Start (it is part of the timer state, so it applies to every lead screen, and the server refuses those commands while it is on), and a red banner shows if a command is attempted while disconnected. Perform mode (per screen, remembered in localStorage) hides the controls except a Start button (no Pause, and Esc does nothing) and enlarges the clocks, side by side in landscape with Start and Exit under the digits; entering it turns on Show lock, exiting leaves the lock on, and the status bar shows a compact screens count.
 
+### QLab bridge
+
+**`qlab-bridge.mjs`** (Node, no extra dependencies) fires a QLab cue when the timer reaches virtual zero. It joins the timer like a screen (a viewer named "QLab bridge (cue N)", so it shows in the Screens panel), with its own copy of the min-RTT clock sync, and works with either backend (`--server`, default `http://localhost:8787`). From each state broadcast and clock sample it computes the server time of zero (`startRealTimestamp - accumulatedVirtualMs / speed`), sleeps until 20ms before, then spins on `setImmediate` for sub-ms precision. Pause/reset/speed changes re-arm or disarm it; it fires at most once per run (keyed on start timestamp, position and speed), and a zero already in the past is never fired late (except up to 50ms when a clock correction for the run it is already armed for moves zero just into the past). It talks to QLab over TCP OSC (SLIP-framed, default `127.0.0.1:53000`) so it gets replies: it sends `/connect <passcode>` if given and `/alwaysReply 1`, checks every 15s that the cue exists (`/cue/N/name`), and logs the reply to `/cue/N/start`; if TCP is down it sends the start over UDP to the same port. QLab authorises a passcode per TCP connection and per UDP sending socket, so with a passcode the bridge also sends `/connect` from its UDP socket at startup and every 15s, keeping the fallback authorised. Cue numbers can contain letters, dots, `-` and `_`; characters OSC reserves (spaces, `/`, wildcards) are rejected in favour of `--cue-id`. QLab replies `denied` unless the workspace's OSC Access allows View and Control (with or without a passcode).
+
 ### Offline caveats
 
 `public/sw.js` (network-first offline cache) and the Wake Lock API only work in a secure context (HTTPS or localhost), so neither is active for LAN devices on plain `http://192.168…`. Fonts are vendored in `public/fonts/` so nothing is fetched from the internet.
@@ -86,6 +91,7 @@ Vitest with three projects (`vitest.config.mts`):
 
 - **`server`** (`test/node/`) — each test spawns its own `server.js` child process (free port, temp `STATE_FILE`) via a Vitest fixture, so these tests run concurrently. Talks to it over real WebSockets and HTTP. Also covers static file serving, path traversal, and state-file recovery.
 - **`worker`** (`test/worker/`) — runs `src/` inside workerd via `@cloudflare/vitest-pool-workers` (reads `wrangler.toml`; `LEAD_PASSWORD` is `test-password`). Also covers hibernation and the heartbeat alarm.
+- The `server` project also has `test/node/qlab-bridge.test.js`: OSC/SLIP encoding, and the bridge following a real `server.js` and firing a fake TCP QLab within 25ms of zero.
 - **`frontend`** (`test/frontend/`) — unit tests for `public/js` modules under happy-dom: clock sync, display rendering/highlighting, and the reconnect/liveness logic in `websocket-client.js` (with a fake `WebSocket` and fake timers).
 
 `test/shared/protocol-suite.js` is the WebSocket protocol spec. It takes a `test` extended with a per-test `backend` fixture (`connect`, `restart`, `password`) and runs against **both** backends, so `server.js` and `timer-room.ts` must behave identically — when changing the protocol, update both and add the test there. Password auth is throttled per IP (all test sockets share one), so the suite's `connectLead` uses the password once per test and the reconnect token after that; do the same in new tests rather than sending the password repeatedly.
