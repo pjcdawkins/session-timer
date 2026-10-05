@@ -5,7 +5,7 @@
 import { describe, expect } from "vitest";
 import { sleep } from "./client.js";
 
-const DEFAULT_START_MS = -3000;
+const DEFAULT_START_MS = -5000;
 
 /**
  * @param it  A Vitest `test` extended with a `backend` fixture, fresh per test:
@@ -242,7 +242,7 @@ export function defineProtocolTests(it) {
       lead.close();
     });
 
-    it("reset returns to the -3s count-in but keeps speed and highlight", async ({ backend }) => {
+    it("reset returns to the -5s count-in but keeps speed and highlight", async ({ backend }) => {
       const lead = await connectLead(backend);
       lead.send({ type: "setSpeed", speed: 2 });
       await lead.next("state");

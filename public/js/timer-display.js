@@ -6,6 +6,8 @@ let minuteHand = null;
 let digitalEl = null;
 let realTimeEl = null;
 let realTimeContainer = null;
+let countdownDigit = null;
+let countdownMode = null;
 const ticks = [];
 let lastHighlight;
 
@@ -89,6 +91,13 @@ export function initAnalogClock(container) {
     ticks.push(line);
   }
 
+  // Count-in digit, behind the hands
+  countdownDigit = document.createElementNS(NS, "text");
+  countdownDigit.setAttribute("x", "100");
+  countdownDigit.setAttribute("y", "100");
+  countdownDigit.setAttribute("class", "countdown-digit");
+  svg.appendChild(countdownDigit);
+
   // Minute hand
   minuteHand = document.createElementNS(NS, "line");
   minuteHand.setAttribute("x1", "100");
@@ -122,6 +131,11 @@ export function initDisplay() {
   digitalEl = document.getElementById("digital-clock");
   realTimeEl = document.getElementById("real-time-value");
   realTimeContainer = document.getElementById("real-time");
+
+  // Full-screen wash behind the page content during the count-in (see style.css)
+  const wash = document.createElement("div");
+  wash.id = "countdown-wash";
+  document.body.prepend(wash);
 }
 
 function renderDigital(virtualMs, realMs) {
@@ -151,11 +165,58 @@ function renderAnalog(virtualMs) {
   minuteHand.setAttribute("transform", `rotate(${minuteDeg} 100 100)`);
 }
 
+/** Fraction of a beat over which each count-in pulse fades out. */
+const PULSE_DECAY = 0.6;
+/** The count-in cue covers at most the last 10 seconds of a longer countdown. */
+const COUNTDOWN_MAX_MS = 10_000;
+/**
+ * Pulses come once per virtual second, i.e. `speed` per real second. Above
+ * this speed the wash stays steady, keeping well under the WCAG limit of
+ * three flashes per second.
+ */
+const MAX_PULSE_SPEED = 2;
+
+/**
+ * Count-in cue, so a start is noticeable from across a stage or desk.
+ * While running in the last 10s before zero, the page is washed in colour that pulses on each
+ * whole second, with the seconds remaining shown large on the clock face; for
+ * the first second after zero it flashes in a "go" colour and fades out.
+ * Derived purely from the synced elapsed time, so every screen pulses
+ * together, and a screen that joins mid count-in picks it up in step.
+ */
+function renderCountdown(virtualMs) {
+  const running = !!currentState?.running;
+  let mode = null;
+  let pulse = 0;
+  if (running && virtualMs >= -COUNTDOWN_MAX_MS && virtualMs < 1000) {
+    const beat = Math.floor(virtualMs / 1000);
+    const phase = virtualMs / 1000 - beat;
+    pulse = Math.max(0, 1 - phase / PULSE_DECAY) ** 2;
+    if (beat < 0) {
+      mode = "counting";
+      countdownDigit.textContent = String(-beat);
+      if (currentState.speed > MAX_PULSE_SPEED) pulse = 0;
+    } else {
+      mode = "go";
+      pulse = (1 - phase) ** 2;
+    }
+  }
+
+  const root = document.documentElement;
+  if (mode !== countdownMode) {
+    root.classList.toggle("countdown-counting", mode === "counting");
+    root.classList.toggle("countdown-go", mode === "go");
+    countdownMode = mode;
+  }
+  if (mode) root.style.setProperty("--countdown-pulse", pulse.toFixed(3));
+}
+
 export function startRenderLoop() {
   function frame() {
     const { virtual, real } = getElapsedMs();
     renderDigital(virtual, real);
     renderAnalog(virtual);
+    renderCountdown(virtual);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

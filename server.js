@@ -24,8 +24,8 @@ const networkUrls = [];
 // Timer state (mirrors timer-room.ts InternalState)
 // ---------------------------------------------------------------------------
 
-// Default start time is -3s so there's a count-in
-const DEFAULT_START_MS = -3000;
+// Default start time is -5s so there's a count-in
+const DEFAULT_START_MS = -5000;
 
 let state = {
   running: false,

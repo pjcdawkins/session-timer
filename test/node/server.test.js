@@ -117,7 +117,7 @@ describe.concurrent("state file", () => {
 
     const c = await server.connect();
     const { state } = await c.next("state");
-    expect(state).toMatchObject({ running: false, speed: 1, accumulatedVirtualMs: -3000 });
+    expect(state).toMatchObject({ running: false, speed: 1, accumulatedVirtualMs: -5000 });
   });
 });
 

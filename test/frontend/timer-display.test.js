@@ -42,7 +42,7 @@ function state(overrides) {
   return {
     running: false,
     speed: 1,
-    accumulatedVirtualMs: -3000,
+    accumulatedVirtualMs: -5000,
     startRealTimestamp: null,
     serverNow: NOW,
     highlight: null,
@@ -74,14 +74,14 @@ describe("getElapsedMs", () => {
 });
 
 describe("digital display", () => {
-  it("shows the -3s count-in", () => {
+  it("shows the -5s count-in", () => {
     display.updateState(state());
     render();
-    expect(digital()).toBe("-00:00:03");
+    expect(digital()).toBe("-00:00:05");
   });
 
   it("counts in -3, -2, -1, 0 at 1x without lingering on -0", () => {
-    display.updateState(state({ running: true, startRealTimestamp: NOW }));
+    display.updateState(state({ running: true, accumulatedVirtualMs: -3000, startRealTimestamp: NOW }));
     vi.setSystemTime(NOW + 100);
     render();
     expect(digital()).toBe("-00:00:03");
@@ -109,7 +109,7 @@ describe("digital display", () => {
   });
 
   it("counts through zero with tenths below 1x", () => {
-    display.updateState(state({ running: true, speed: 0.5, startRealTimestamp: NOW }));
+    display.updateState(state({ running: true, speed: 0.5, accumulatedVirtualMs: -3000, startRealTimestamp: NOW }));
     vi.setSystemTime(NOW + 5000);
     render();
     expect(digital()).toBe("-00:00:00.5");
@@ -169,5 +169,116 @@ describe("tick highlighting", () => {
     expect(highlighted()).toEqual([7, 37]);
     display.updateState(state({ highlight: null }));
     expect(highlighted()).toEqual([]);
+  });
+});
+
+describe("count-in cue", () => {
+  const root = document.documentElement;
+  const mode = () =>
+    root.classList.contains("countdown-counting") ? "counting" : root.classList.contains("countdown-go") ? "go" : null;
+  const pulse = () => Number(root.style.getPropertyValue("--countdown-pulse"));
+  const digit = () => document.querySelector(".countdown-digit").textContent;
+  const at = (ms) => {
+    vi.setSystemTime(NOW + ms);
+    render();
+  };
+
+  afterEach(() => {
+    root.classList.remove("countdown-counting", "countdown-go");
+    root.style.removeProperty("--countdown-pulse");
+  });
+
+  it("adds the wash element to the page", () => {
+    expect(document.getElementById("countdown-wash")).not.toBeNull();
+  });
+
+  it("is off while paused, even below zero", () => {
+    display.updateState(state());
+    render();
+    expect(mode()).toBe(null);
+  });
+
+  it("counts down the seconds remaining, pulsing on each one", () => {
+    display.updateState(state({ running: true, startRealTimestamp: NOW }));
+    at(0);
+    expect(mode()).toBe("counting");
+    expect(digit()).toBe("5");
+    expect(pulse()).toBe(1);
+    at(300);
+    expect(pulse()).toBeGreaterThan(0);
+    expect(pulse()).toBeLessThan(1);
+    at(900);
+    expect(pulse()).toBe(0);
+    at(1000);
+    expect(digit()).toBe("4");
+    expect(pulse()).toBe(1);
+    at(4999);
+    expect(digit()).toBe("1");
+  });
+
+  it("flashes at zero, then clears after a second", () => {
+    display.updateState(state({ running: true, startRealTimestamp: NOW }));
+    at(5000);
+    expect(mode()).toBe("go");
+    expect(pulse()).toBe(1);
+    at(5500);
+    expect(mode()).toBe("go");
+    expect(pulse()).toBeCloseTo(0.25);
+    at(6000);
+    expect(mode()).toBe(null);
+  });
+
+  it("only covers the last 10 seconds of a longer countdown", () => {
+    display.updateState(state({ running: true, accumulatedVirtualMs: -60_000, startRealTimestamp: NOW }));
+    at(49_999);
+    expect(mode()).toBe(null);
+    at(50_000);
+    expect(mode()).toBe("counting");
+    expect(digit()).toBe("10");
+  });
+
+  it("follows the timer speed", () => {
+    display.updateState(state({ running: true, speed: 2, startRealTimestamp: NOW }));
+    at(1000);
+    expect(digit()).toBe("3");
+    at(2500);
+    expect(mode()).toBe("go");
+  });
+
+  it("keeps the wash steady above 2x, so it never flashes more than 3 times a second", () => {
+    display.updateState(state({ running: true, speed: 4, startRealTimestamp: NOW }));
+    at(0);
+    expect(mode()).toBe("counting");
+    expect(digit()).toBe("5");
+    expect(pulse()).toBe(0);
+    at(250);
+    expect(digit()).toBe("4");
+    expect(pulse()).toBe(0);
+    at(1250);
+    expect(mode()).toBe("go");
+    expect(pulse()).toBe(1);
+  });
+
+  it("still pulses at 2x", () => {
+    display.updateState(state({ running: true, speed: 2, startRealTimestamp: NOW }));
+    at(500);
+    expect(pulse()).toBe(1);
+  });
+
+    it("picks up mid count-in in step, e.g. after a reconnect", () => {
+    display.updateState(state({ running: true, startRealTimestamp: NOW - 2300 }));
+    at(0);
+    expect(mode()).toBe("counting");
+    expect(digit()).toBe("3");
+    expect(pulse()).toBeCloseTo((1 - 0.3 / 0.6) ** 2);
+  });
+
+  it("stops when paused mid count-in", () => {
+    display.updateState(state({ running: true, startRealTimestamp: NOW }));
+    at(1500);
+    expect(mode()).toBe("counting");
+    display.updateState(state({ accumulatedVirtualMs: -3500 }));
+    render();
+    expect(mode()).toBe(null);
   });
 });
