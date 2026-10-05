@@ -230,14 +230,16 @@ export class TimerRoom extends DurableObject<Env> {
       }
       const logouts = attachment.logouts ?? 0;
       if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+      const success = msg.password === this.env.LEAD_PASSWORD;
+      const token = success ? await this.issueLeadToken() : undefined;
       try {
-        // Re-read: hello/ping may have updated the attachment while we waited
+        // Re-read after the last await: hello/ping may have updated the
+        // attachment, or logout cancelled this check, while we waited
         const current = ws.deserializeAttachment() as Attachment;
         if ((current.logouts ?? 0) !== logouts) return; // Signed out meanwhile
-        current.authenticated = msg.password === this.env.LEAD_PASSWORD;
+        current.authenticated = success;
         ws.serializeAttachment(current);
-        const token = current.authenticated ? await this.issueLeadToken() : undefined;
-        ws.send(JSON.stringify({ type: "authResult", success: current.authenticated, token }));
+        ws.send(JSON.stringify({ type: "authResult", success, token }));
       } catch {
         // Socket closed while waiting
       }
