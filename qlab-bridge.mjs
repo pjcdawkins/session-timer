@@ -260,7 +260,10 @@ class QLabLink {
       const reply = await this.request(address);
       return reply?.status ?? "no reply";
     }
-    this.udp ??= dgram.createSocket("udp4");
+    if (!this.udp) {
+      this.udp = dgram.createSocket("udp4");
+      this.udp.on("error", (err) => this.log(`UDP send to QLab failed: ${err.message}`));
+    }
     this.udp.send(encodeOsc(address), this.port, this.host);
     return "sent over UDP (TCP was down)";
   }

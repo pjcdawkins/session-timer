@@ -114,6 +114,8 @@ async function startFakeQLab({ cues = { 2: "Tape" }, passcode } = {}) {
         reply(m[2] === "name" ? { status: "ok", data: cues[m[1]] } : { status: "ok" });
       }),
     );
+    // The bridge resets its connection when stopped
+    socket.on("error", () => {});
     socket.on("close", () => sockets.delete(socket));
   });
   await new Promise((resolve) => srv.listen(0, "127.0.0.1", resolve));
