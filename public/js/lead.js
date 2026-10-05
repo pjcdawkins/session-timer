@@ -13,10 +13,9 @@ initFullscreen();
 initTheme();
 initOffline();
 
-const authGate = document.getElementById("auth-gate");
 const authError = document.getElementById("auth-error");
 const passwordInput = document.getElementById("password-input");
-const controls = document.getElementById("controls");
+const btnSignOut = document.getElementById("btn-sign-out");
 const statusBar = document.getElementById("status-bar");
 const statusText = document.getElementById("status-text");
 const connectionDot = document.getElementById("connection-dot");
@@ -63,9 +62,21 @@ let authPending = false;
 
 // After a password login the server issues a reconnect token, which we store
 // instead of the password. Token auth isn't throttled, so reconnects can't be
-// starved by someone else on the same IP.
+// starved by someone else on the same IP. Each successful auth returns a fresh
+// token lasting 24h. (These keys are also read by the inline script in
+// lead.html, which shows the controls before first paint if one is saved.)
 const TOKEN_KEY = "timer-lead-token";
 const LEGACY_PASSWORD_KEY = "timer-lead-pw"; // Stored by older versions
+const TOKEN_REFRESH_MS = 60 * 60 * 1000;
+
+function forgetCredential() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(LEGACY_PASSWORD_KEY);
+}
+
+function setSignedIn(on) {
+  document.body.classList.toggle("signed-in", on);
+}
 
 function storedCredential() {
   const token = localStorage.getItem(TOKEN_KEY);
@@ -74,9 +85,16 @@ function storedCredential() {
   return password ? { password } : null;
 }
 
-function sendAuth(credential) {
+// Whether the auth in flight is a password typed into the gate, as opposed to
+// the saved credential (whose rejection usually means the login expired)
+let authFromForm = false;
+
+function sendAuth(credential, fromForm = false) {
   if (authPending || !credential) return;
-  if (send({ type: "auth", ...credential })) authPending = true;
+  if (send({ type: "auth", ...credential })) {
+    authPending = true;
+    authFromForm = fromForm;
+  }
 }
 let qrLoaded = false;
 let running = false;
@@ -130,23 +148,18 @@ connect({
       sessionAuthed = true;
       if (token) localStorage.setItem(TOKEN_KEY, token);
       localStorage.removeItem(LEGACY_PASSWORD_KEY);
-      authGate.classList.add("hidden");
-      controls.classList.remove("hidden");
+      setSignedIn(true);
       loadQr();
     } else if (reason === "rateLimited" && authenticated) {
       // Re-auth after reconnect was throttled: retry quietly
       setTimeout(() => sendAuth(storedCredential()), 3000);
     } else {
       authenticated = false;
-      if (reason !== "rateLimited") {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(LEGACY_PASSWORD_KEY);
-      }
-      controls.classList.add("hidden");
-      authGate.classList.remove("hidden");
+      if (reason !== "rateLimited") forgetCredential();
+      setSignedIn(false);
       authError.textContent = reason === "rateLimited"
         ? "Too many attempts, try again in a few seconds"
-        : "Wrong password";
+        : authFromForm ? "Wrong password" : "Signed out — enter the password again";
       authError.classList.remove("hidden");
       passwordInput.value = "";
       passwordInput.focus();
@@ -178,7 +191,28 @@ startRenderLoop();
 // Auth form
 document.getElementById("auth-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  sendAuth({ password: passwordInput.value });
+  sendAuth({ password: passwordInput.value }, true);
+});
+
+// A login lasts 24h from its last use, so renew it while the page is open:
+// otherwise a screen connected for a whole day would be signed out at its
+// next reconnect
+setInterval(() => {
+  if (sessionAuthed) sendAuth(storedCredential());
+}, TOKEN_REFRESH_MS);
+
+// Sign out this screen: forget the token and drop this socket's auth. (Other
+// lead screens stay signed in; changing LEAD_PASSWORD signs out every screen.)
+btnSignOut.addEventListener("click", () => {
+  send({ type: "logout" });
+  forgetCredential();
+  authenticated = false;
+  sessionAuthed = false;
+  authPending = false; // Ignore the result of any auth still in flight
+  setSignedIn(false);
+  authError.classList.add("hidden");
+  passwordInput.value = "";
+  passwordInput.focus();
 });
 
 // Sync controls from server state. Another lead may change things at any time,
@@ -273,6 +307,7 @@ function applyLock(locked) {
   btnStop.disabled = locked || !running;
   lockable.disabled = locked;
   btnReset.disabled = locked;
+  btnSignOut.disabled = locked;
   lockIndicator.classList.toggle("hidden", !locked);
   if (locked) cancelResetConfirm();
 }

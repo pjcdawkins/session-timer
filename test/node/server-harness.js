@@ -23,12 +23,12 @@ function freePort() {
   });
 }
 
-export async function startServer({ stateFile, port, password = PASSWORD } = {}) {
+export async function startServer({ stateFile, port, password = PASSWORD, env = {} } = {}) {
   port ??= await freePort();
   stateFile ??= path.join(fs.mkdtempSync(path.join(os.tmpdir(), "timer-test-")), "state.json");
 
   const child = spawn(process.execPath, [SERVER], {
-    env: { ...process.env, PORT: String(port), STATE_FILE: stateFile, LEAD_PASSWORD: password },
+    env: { ...process.env, PORT: String(port), STATE_FILE: stateFile, LEAD_PASSWORD: password, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
 

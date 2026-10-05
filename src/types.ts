@@ -31,6 +31,7 @@ export type ClientMessage =
   | { type: "hello"; id: string; name: string; role: ClientRole }
   | { type: "ping"; t: number; rtt: number | null }
   | { type: "auth"; password?: string; token?: string }
+  | { type: "logout" }
   | { type: "start" }
   | { type: "stop" }
   | { type: "reset" }

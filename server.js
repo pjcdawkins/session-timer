@@ -13,7 +13,10 @@ const PORT = Number(process.env.PORT) || 8787;
 const LEAD_PASSWORD = process.env.LEAD_PASSWORD || "session";
 const PUBLIC_DIR = path.resolve(__dirname, "public");
 const STATE_FILE = process.env.STATE_FILE || path.resolve(__dirname, ".timer-state.json");
-const TOKEN_FILE = path.join(path.dirname(STATE_FILE), ".timer-lead-token.json");
+const TOKEN_SECRET_FILE = path.join(path.dirname(STATE_FILE), ".timer-lead-secret.json");
+const LEGACY_TOKEN_FILE = path.join(path.dirname(STATE_FILE), ".timer-lead-token.json");
+// How long a lead login lasts without being used. Overridable for tests.
+const LEAD_TOKEN_TTL_MS = Number(process.env.LEAD_TOKEN_TTL_MS) || 24 * 60 * 60 * 1000;
 // Sockets silent for longer than this are dropped (clients ping every 2s)
 const CLIENT_TIMEOUT_MS = 15_000;
 
@@ -136,7 +139,7 @@ const wss = new WebSocketServer({ server: httpServer, path: "/ws", perMessageDef
 // Server-level errors (e.g. port in use) are re-emitted here; the httpServer handler below deals with them
 wss.on("error", () => {});
 
-/** @type {Map<import('ws').WebSocket, { authenticated: boolean, ip: string, id: string, name: string, role: string, rtt: number | null, lastSeen: number }>} */
+/** @type {Map<import('ws').WebSocket, { authenticated: boolean, logouts: number, ip: string, id: string, name: string, role: string, rtt: number | null, lastSeen: number }>} */
 const clients = new Map();
 
 function listClients() {
@@ -159,38 +162,50 @@ const authNextSlot = new Map();
 
 // Reconnect token (mirrors timer-room.ts): issued after a successful password
 // check and accepted without throttling, so a client sharing the lead's IP
-// can't starve reconnects. Changing LEAD_PASSWORD revokes it.
-// It's 256 random bits (never derived from the password, or password guesses
-// could be submitted as tokens to dodge the throttle), persisted next to the
-// state file so it survives restarts, alongside an HMAC of the password keyed
-// by the token: if LEAD_PASSWORD changes, a new token is issued.
-const LEAD_TOKEN = loadOrCreateLeadToken();
+// can't starve reconnects. It is "<expiresAt>.<HMAC of expiresAt>", signed
+// with a 256-bit random secret (never derived from the password, or password
+// guesses could be submitted as tokens to dodge the throttle). Every
+// successful auth issues a fresh token, so a login lasts LEAD_TOKEN_TTL_MS
+// after it was last used; the lead page re-auths hourly while open.
+// The secret is persisted next to the state file so tokens survive restarts,
+// alongside an HMAC of the password keyed by the secret: if LEAD_PASSWORD
+// changes, a new secret is made and every token is revoked.
+const LEAD_TOKEN_SECRET = loadOrCreateTokenSecret();
 
-function loadOrCreateLeadToken() {
-  const check = (token) => crypto.createHmac("sha256", token).update(LEAD_PASSWORD).digest("hex");
+function loadOrCreateTokenSecret() {
+  const check = (secret) => crypto.createHmac("sha256", secret).update(LEAD_PASSWORD).digest("hex");
+  // Tokens from before expiry was added are no longer accepted
+  try { fs.rmSync(LEGACY_TOKEN_FILE, { force: true }); } catch { /* ignore */ }
   try {
-    const stored = JSON.parse(fs.readFileSync(TOKEN_FILE, "utf8"));
-    if (typeof stored.token === "string" && stored.passwordCheck === check(stored.token)) return stored.token;
+    const stored = JSON.parse(fs.readFileSync(TOKEN_SECRET_FILE, "utf8"));
+    if (typeof stored.secret === "string" && stored.passwordCheck === check(stored.secret)) return stored.secret;
   } catch (err) {
-    if (err.code !== "ENOENT") console.error(`Could not read ${TOKEN_FILE}:`, err.message);
+    if (err.code !== "ENOENT") console.error(`Could not read ${TOKEN_SECRET_FILE}:`, err.message);
   }
-  const token = crypto.randomBytes(32).toString("hex");
+  const secret = crypto.randomBytes(32).toString("hex");
   try {
-    fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token, passwordCheck: check(token) }), { mode: 0o600 });
+    fs.writeFileSync(TOKEN_SECRET_FILE, JSON.stringify({ secret, passwordCheck: check(secret) }), { mode: 0o600 });
   } catch (err) {
-    console.error(`Could not write ${TOKEN_FILE}:`, err.message);
+    console.error(`Could not write ${TOKEN_SECRET_FILE}:`, err.message);
   }
-  return token;
+  return secret;
 }
 
-const LEAD_TOKEN_BUF = Buffer.from(LEAD_TOKEN);
+function signExpiry(expires) {
+  return crypto.createHmac("sha256", LEAD_TOKEN_SECRET).update(expires).digest("hex");
+}
+
+function issueLeadToken() {
+  const expires = String(Date.now() + LEAD_TOKEN_TTL_MS);
+  return `${expires}.${signExpiry(expires)}`;
+}
 
 function isLeadToken(token) {
-  if (typeof token !== "string") return false;
-  // Compare byte lengths, not string lengths: timingSafeEqual throws on a
-  // mismatch, and a non-ASCII string can have the right length in characters
-  const buf = Buffer.from(token);
-  return buf.length === LEAD_TOKEN_BUF.length && crypto.timingSafeEqual(buf, LEAD_TOKEN_BUF);
+  // The pattern also rules out non-ASCII strings, which could have the right
+  // length in characters but not in bytes (timingSafeEqual throws on that)
+  const match = typeof token === "string" && /^(\d{1,15})\.([0-9a-f]{64})$/.exec(token);
+  if (!match || Number(match[1]) <= Date.now()) return false;
+  return crypto.timingSafeEqual(Buffer.from(match[2]), Buffer.from(signExpiry(match[1])));
 }
 
 /** Returns ms to wait before checking, or null if the wait would be too long. */
@@ -237,7 +252,9 @@ setInterval(() => {
 }, 5_000);
 
 wss.on("connection", (ws, req) => {
-  const client = { authenticated: false, ip: req.socket.remoteAddress ?? "unknown", id: "", name: "", role: "viewer", rtt: null, lastSeen: Date.now() };
+  // logouts is bumped by logout, so a throttled password check still queued
+  // can't sign the socket back in when it runs
+  const client = { authenticated: false, logouts: 0, ip: req.socket.remoteAddress ?? "unknown", id: "", name: "", role: "viewer", rtt: null, lastSeen: Date.now() };
   clients.set(ws, client);
 
   // Send current state immediately on connect
@@ -275,8 +292,16 @@ wss.on("connection", (ws, req) => {
       ws.send(JSON.stringify({
         type: "authResult",
         success: client.authenticated,
-        ...(client.authenticated && { token: LEAD_TOKEN }),
+        ...(client.authenticated && { token: issueLeadToken() }),
       }));
+      return;
+    }
+
+    // Sign out this socket. The token itself stays valid until it expires
+    // (the client forgets it); changing LEAD_PASSWORD revokes every token.
+    if (msg?.type === "logout") {
+      client.authenticated = false;
+      client.logouts++;
       return;
     }
 
@@ -286,13 +311,14 @@ wss.on("connection", (ws, req) => {
         ws.send(JSON.stringify({ type: "authResult", success: false, reason: "rateLimited" }));
         return;
       }
+      const logouts = client.logouts;
       setTimeout(() => {
-        if (ws.readyState !== ws.OPEN) return;
+        if (ws.readyState !== ws.OPEN || client.logouts !== logouts) return;
         client.authenticated = msg.password === LEAD_PASSWORD;
         ws.send(JSON.stringify({
           type: "authResult",
           success: client.authenticated,
-          ...(client.authenticated && { token: LEAD_TOKEN }),
+          ...(client.authenticated && { token: issueLeadToken() }),
         }));
       }, wait);
       return;
