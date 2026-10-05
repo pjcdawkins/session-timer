@@ -446,10 +446,11 @@ body::before {
   background: var(--overlay-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  animation: fadeIn 0.4s var(--ease-out-expo);
 }
 
-#auth-gate.hidden {
+/* Signed in (or a saved login is being checked): set before first paint by
+   the inline script in lead.html, then kept in sync by lead.js */
+body.signed-in #auth-gate {
   display: none;
 }
 
@@ -556,7 +557,7 @@ body::before {
   max-width: 480px;
 }
 
-#controls.hidden {
+body:not(.signed-in) #controls {
   display: none;
 }
 
@@ -983,6 +984,29 @@ body::before {
 
 #btn-qr:active {
   transform: scale(0.97);
+}
+
+#btn-sign-out {
+  padding: 0.4rem 0.8rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.2s var(--ease-in-out);
+}
+
+#btn-sign-out:hover:not(:disabled) {
+  color: var(--red);
+}
+
+#btn-sign-out:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* ─── Responsive Adjustments ─── */

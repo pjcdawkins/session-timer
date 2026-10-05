@@ -40,13 +40,19 @@ const AUTH_MAX_WAIT_MS = 5_000;
 
 // Reconnect token: issued after a successful password check and accepted
 // without throttling, so a client sharing the lead's IP can't starve
-// reconnects. It's 256 random bits (never derived from the password, or
-// password guesses could be submitted as tokens to dodge the throttle),
-// persisted in DO storage alongside an HMAC of the password keyed by the
-// token. If LEAD_PASSWORD changes the HMAC no longer matches, so a new token
-// is issued and old ones are revoked.
-interface StoredLeadToken {
-  token: string;
+// reconnects. It is "<expiresAt>.<HMAC of expiresAt>", signed with a 256-bit
+// random secret (never derived from the password, or password guesses could
+// be submitted as tokens to dodge the throttle). Every successful auth issues
+// a fresh token, so a login lasts LEAD_TOKEN_TTL_MS after it was last used;
+// the lead page re-auths hourly while open. The secret is persisted in DO
+// storage alongside an HMAC of the password keyed by the secret. If
+// LEAD_PASSWORD changes the HMAC no longer matches, so a new secret is made
+// and every token is revoked.
+const LEAD_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const LEAD_TOKEN = /^(\d{1,15})\.([0-9a-f]{64})$/;
+
+interface StoredTokenSecret {
+  secret: string;
   passwordCheck: string;
 }
 
@@ -54,12 +60,14 @@ function toHex(buf: ArrayBuffer | Uint8Array): string {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function passwordCheck(token: string, password: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw", enc.encode(token), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+function hmacKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
   );
-  return toHex(await crypto.subtle.sign("HMAC", key, enc.encode(password)));
+}
+
+async function hmacHex(key: CryptoKey, message: string): Promise<string> {
+  return toHex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message)));
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -77,25 +85,38 @@ export class TimerRoom extends DurableObject<Env> {
   // In-memory only: lost on hibernation, which only happens after the DO
   // has been idle, by which point any reserved slots have expired anyway.
   private authNextSlot = new Map<string, number>();
-  private leadToken: Promise<string> | null = null;
+  private tokenKey: Promise<CryptoKey> | null = null;
 
-  private getLeadToken(): Promise<string> {
-    this.leadToken ??= this.loadOrCreateLeadToken().catch((err) => {
-      this.leadToken = null; // Don't cache a failure
+  private getTokenKey(): Promise<CryptoKey> {
+    this.tokenKey ??= this.loadOrCreateTokenKey().catch((err) => {
+      this.tokenKey = null; // Don't cache a failure
       throw err;
     });
-    return this.leadToken;
+    return this.tokenKey;
   }
 
-  private async loadOrCreateLeadToken(): Promise<string> {
+  private async loadOrCreateTokenKey(): Promise<CryptoKey> {
     const password = this.env.LEAD_PASSWORD;
-    const stored = await this.ctx.storage.get<StoredLeadToken>("leadToken");
-    if (stored && constantTimeEqual(stored.passwordCheck, await passwordCheck(stored.token, password))) {
-      return stored.token;
+    const stored = await this.ctx.storage.get<StoredTokenSecret>("leadTokenSecret");
+    if (stored && constantTimeEqual(stored.passwordCheck, await hmacHex(await hmacKey(stored.secret), password))) {
+      return hmacKey(stored.secret);
     }
-    const token = toHex(crypto.getRandomValues(new Uint8Array(32)));
-    await this.ctx.storage.put("leadToken", { token, passwordCheck: await passwordCheck(token, password) });
-    return token;
+    const secret = toHex(crypto.getRandomValues(new Uint8Array(32)));
+    const key = await hmacKey(secret);
+    await this.ctx.storage.put("leadTokenSecret", { secret, passwordCheck: await hmacHex(key, password) });
+    await this.ctx.storage.delete("leadToken"); // From before tokens expired; no longer accepted
+    return key;
+  }
+
+  private async issueLeadToken(): Promise<string> {
+    const expires = String(Date.now() + LEAD_TOKEN_TTL_MS);
+    return `${expires}.${await hmacHex(await this.getTokenKey(), expires)}`;
+  }
+
+  private async isLeadToken(token: string): Promise<boolean> {
+    const match = LEAD_TOKEN.exec(token);
+    if (!match || Number(match[1]) <= Date.now()) return false;
+    return constantTimeEqual(match[2], await hmacHex(await this.getTokenKey(), match[1]));
   }
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -173,16 +194,24 @@ export class TimerRoom extends DurableObject<Env> {
     }
 
     if (msg.type === "auth" && typeof msg.token === "string") {
-      const token = await this.getLeadToken();
-      const success = constantTimeEqual(msg.token, token);
+      const success = await this.isLeadToken(msg.token);
+      const token = success ? await this.issueLeadToken() : undefined;
       try {
         const current = ws.deserializeAttachment() as Attachment;
         current.authenticated = success;
         ws.serializeAttachment(current);
-        ws.send(JSON.stringify({ type: "authResult", success, ...(success && { token }) }));
+        ws.send(JSON.stringify({ type: "authResult", success, token }));
       } catch {
         // Socket closed
       }
+      return;
+    }
+
+    // Sign out this socket. The token itself stays valid until it expires
+    // (the client forgets it); changing LEAD_PASSWORD revokes every token.
+    if (msg.type === "logout") {
+      attachment.authenticated = false;
+      ws.serializeAttachment(attachment);
       return;
     }
 
@@ -198,7 +227,7 @@ export class TimerRoom extends DurableObject<Env> {
         const current = ws.deserializeAttachment() as Attachment;
         current.authenticated = msg.password === this.env.LEAD_PASSWORD;
         ws.serializeAttachment(current);
-        const token = current.authenticated ? await this.getLeadToken() : undefined;
+        const token = current.authenticated ? await this.issueLeadToken() : undefined;
         ws.send(JSON.stringify({ type: "authResult", success: current.authenticated, token }));
       } catch {
         // Socket closed while waiting

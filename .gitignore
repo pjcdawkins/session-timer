@@ -4,4 +4,5 @@ dist/
 .dev.vars
 .timer-state.json
 .timer-state.json.tmp
+.timer-lead-secret.json
 .timer-lead-token.json

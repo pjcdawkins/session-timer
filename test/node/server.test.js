@@ -39,7 +39,7 @@ const it = test.extend({
     });
     for (const s of sockets) s.close();
     await current.stop();
-    // The state file's directory also holds the lead token file
+    // The state file's directory also holds the lead token secret file
     fs.rmSync(path.dirname(current.stateFile), { recursive: true, force: true });
   },
   backend: async ({ server }, use) => {
@@ -121,8 +121,8 @@ describe.concurrent("state file", () => {
   });
 });
 
-describe.concurrent("lead token file", () => {
-  const tokenFile = (server) => path.join(path.dirname(server.stateFile), ".timer-lead-token.json");
+describe.concurrent("lead token secret file", () => {
+  const tokenFile = (server) => path.join(path.dirname(server.stateFile), ".timer-lead-secret.json");
 
   async function login(server, password = PASSWORD) {
     const c = await server.connect();
@@ -140,6 +140,26 @@ describe.concurrent("lead token file", () => {
   it("doesn't contain the password", async ({ server }) => {
     await login(server);
     expect(fs.readFileSync(tokenFile(server), "utf8")).not.toContain(PASSWORD);
+  });
+
+  it("replaces a token file from before tokens expired", async ({ server }) => {
+    const legacy = path.join(path.dirname(server.stateFile), ".timer-lead-token.json");
+    await server.restart(() => fs.writeFileSync(legacy, JSON.stringify({ token: "0".repeat(64), passwordCheck: "x" })));
+    expect(fs.existsSync(legacy)).toBe(false);
+    const c = await server.connect();
+    c.send({ type: "auth", token: "0".repeat(64) });
+    expect(await c.next("authResult")).toEqual({ type: "authResult", success: false });
+  });
+
+  it("tokens stop working once they expire", async ({ server }) => {
+    await server.restart(undefined, { env: { LEAD_TOKEN_TTL_MS: "1000" } });
+    const { token } = await login(server);
+    const c = await server.connect();
+    c.send({ type: "auth", token });
+    expect(await c.next("authResult")).toMatchObject({ success: true });
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    c.send({ type: "auth", token });
+    expect(await c.next("authResult")).toEqual({ type: "authResult", success: false });
   });
 
   it("is revoked when LEAD_PASSWORD changes", async ({ server }) => {

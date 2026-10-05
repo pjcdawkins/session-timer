@@ -92,6 +92,29 @@ export function defineProtocolTests(it) {
       c.close();
     });
 
+    it("logout revokes this socket's auth, silently", async ({ backend }) => {
+      const c = await connectLead(backend);
+      c.send({ type: "logout" });
+      c.send({ type: "start" });
+      expect(await c.next("error")).toEqual({ type: "error", message: "Not authenticated" });
+      // Nothing else was sent in reply to the logout
+      await c.flush();
+      expect(c.pending("error")).toEqual([]);
+      expect(c.pending("authResult")).toEqual([]);
+      c.close();
+    });
+
+    it("logout doesn't affect other lead sockets", async ({ backend }) => {
+      const a = await connectLead(backend);
+      const b = await connectLead(backend);
+      a.send({ type: "logout" });
+      await a.flush();
+      b.send({ type: "setTime", virtualMs: 3 });
+      expect((await b.next("state")).state.accumulatedVirtualMs).toBe(3);
+      a.close();
+      b.close();
+    });
+
     it("a failed re-auth revokes a previously authenticated socket", async ({ backend }) => {
       const c = await connectLead(backend);
       c.send({ type: "auth", token: "wrong" });
@@ -103,19 +126,25 @@ export function defineProtocolTests(it) {
   });
 
   describe("auth throttle and reconnect token", () => {
-    const TOKEN = /^[0-9a-f]{64}$/;
+    // "<expiresAt>.<signature>"
+    const TOKEN = /^(\d+)\.[0-9a-f]{64}$/;
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const expiresAt = (token) => Number(TOKEN.exec(token)[1]);
 
-    it("issues a random 256-bit token on password login, and accepts it", async ({ backend }) => {
+    it("issues a signed token lasting 24h on password login, and accepts it", async ({ backend }) => {
       const a = await backend.connect();
+      const before = Date.now();
       a.send({ type: "auth", password: backend.password });
       const { token } = await a.next("authResult");
       expect(token).toMatch(TOKEN);
       expect(token).not.toContain(backend.password);
+      expect(expiresAt(token)).toBeGreaterThanOrEqual(before + DAY_MS - 1000);
+      expect(expiresAt(token)).toBeLessThanOrEqual(Date.now() + DAY_MS + 1000);
 
       const b = await backend.connect();
       await b.next("state");
       b.send({ type: "auth", token });
-      expect(await b.next("authResult")).toEqual({ type: "authResult", success: true, token });
+      expect(await b.next("authResult")).toEqual({ type: "authResult", success: true, token: expect.stringMatching(TOKEN) });
       b.send({ type: "setTime", virtualMs: 7 });
       expect((await b.next("state")).state.accumulatedVirtualMs).toBe(7);
       a.close();
@@ -166,12 +195,35 @@ export function defineProtocolTests(it) {
       reconnect.close();
     });
 
+    it("renews the token on each token auth", async ({ backend }) => {
+      await connectLead(backend);
+      const first = tokens.get(backend);
+      await sleep(5);
+      const c = await connectLead(backend);
+      const renewed = tokens.get(backend);
+      expect(expiresAt(renewed)).toBeGreaterThan(expiresAt(first));
+      // Re-auth on the same socket (the lead page does this hourly) renews too
+      c.send({ type: "auth", token: renewed });
+      expect(await c.next("authResult")).toMatchObject({ success: true, token: expect.stringMatching(TOKEN) });
+      c.close();
+    });
+
+    it("rejects a token whose expiry has been changed", async ({ backend }) => {
+      (await connectLead(backend)).close();
+      const [expires, signature] = tokens.get(backend).split(".");
+      const c = await backend.connect();
+      c.send({ type: "auth", token: `${Number(expires) + DAY_MS}.${signature}` });
+      expect(await c.next("authResult")).toEqual({ type: "authResult", success: false });
+      c.close();
+    });
+
     it.for([
-      ["a wrong token", "0".repeat(64)],
+      ["a wrong token", `${Date.now() + 60_000}.${"0".repeat(64)}`],
+      ["a token without an expiry", "0".repeat(64)],
       ["an empty token", ""],
       // Same length in characters as a real token but longer in bytes: this
       // used to make crypto.timingSafeEqual throw and crash the local server
-      ["a non-ASCII token", "é".repeat(64)],
+      ["a non-ASCII token", `${Date.now() + 60_000}.${"é".repeat(64)}`],
     ])("rejects %s without throttling", async ([, token], { backend }) => {
       const c = await backend.connect();
       for (let i = 0; i < 5; i++) c.send({ type: "auth", token });
@@ -183,13 +235,13 @@ export function defineProtocolTests(it) {
       c.close();
     });
 
-    it("keeps the same token across a restart", async ({ backend }) => {
+    it("still accepts the token after a restart", async ({ backend }) => {
       (await connectLead(backend)).close();
       const token = tokens.get(backend);
       await backend.restart();
       const c = await backend.connect();
       c.send({ type: "auth", token });
-      expect(await c.next("authResult")).toEqual({ type: "authResult", success: true, token });
+      expect(await c.next("authResult")).toMatchObject({ type: "authResult", success: true });
       c.close();
     });
   });

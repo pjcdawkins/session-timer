@@ -8,7 +8,7 @@ import {
   runDurableObjectAlarm,
 } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { wrapSocket } from "../shared/client.js";
 import { defineProtocolTests } from "../shared/protocol-suite.js";
 
@@ -68,6 +68,30 @@ describe("hibernation", () => {
     // Same socket, woken from hibernation: still authenticated
     lead.send({ type: "setTime", virtualMs: 5000 });
     expect((await lead.next("state")).state.accumulatedVirtualMs).toBe(5000);
+  });
+});
+
+describe("lead token", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("stops working 24h after it was issued", async () => {
+    const lead = await connect();
+    await lead.next("state");
+    lead.send({ type: "auth", password: PASSWORD });
+    const { token } = await lead.next("authResult");
+
+    // The Durable Object runs in this isolate, so it sees the faked clock
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 24 * 60 * 60 * 1000 - 60_000 });
+    const early = await connect();
+    early.send({ type: "auth", token });
+    expect(await early.next("authResult")).toMatchObject({ success: true });
+
+    vi.setSystemTime(Date.now() + 60_000);
+    const late = await connect();
+    late.send({ type: "auth", token });
+    expect(await late.next("authResult")).toEqual({ type: "authResult", success: false });
   });
 });
 

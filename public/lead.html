@@ -11,6 +11,17 @@
   </script>
 </head>
 <body>
+  <script>
+    // Before first paint, so the page doesn't flash between the password gate
+    // and the controls: with a saved login, show the controls straight away
+    // (lead.js checks it once connected and shows the gate if it's refused),
+    // and restore Perform mode. Keys match lead.js.
+    try {
+      if (localStorage.getItem("timer-lead-token") || localStorage.getItem("timer-lead-pw")) document.body.classList.add("signed-in");
+      if (localStorage.getItem("timer-lead-perform") === "1") document.body.classList.add("perform");
+    } catch {}
+  </script>
+
   <div id="auth-gate">
     <div class="auth-box">
       <h2>Session Lead</h2>
@@ -54,7 +65,7 @@
 
     <div id="command-warning" class="hidden" role="alert">Not connected — command not sent</div>
 
-    <div id="controls" class="hidden">
+    <div id="controls">
       <div class="transport">
         <button type="button" id="btn-start" title="Space">Start</button>
         <button type="button" id="btn-stop" disabled title="Esc">Pause</button>
@@ -118,6 +129,8 @@
       </fieldset>
 
       <button type="button" id="btn-qr" class="hidden">Share QR Code</button>
+
+      <button type="button" id="btn-sign-out" title="Sign this screen out (logins otherwise last 24 hours after last use)">Sign out</button>
     </div>
 
     <div class="corner-footer">
