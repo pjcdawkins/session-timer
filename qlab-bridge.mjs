@@ -11,6 +11,7 @@
 //
 // Run with --help for all options.
 
+import crypto from "node:crypto";
 import dgram from "node:dgram";
 import net from "node:net";
 import os from "node:os";
@@ -253,7 +254,7 @@ class QLabLink {
     this.log(message);
   }
 
-  /** Start the cue. Resolves with QLab's reply status (or "sent" for UDP). */
+  /** Start the cue. Resolves with QLab's reply status, or how the UDP send went. */
   async start() {
     const address = `${this.path}/start`;
     if (this.connected) {
@@ -262,10 +263,13 @@ class QLabLink {
     }
     if (!this.udp) {
       this.udp = dgram.createSocket("udp4");
-      this.udp.on("error", (err) => this.log(`UDP send to QLab failed: ${err.message}`));
+      this.udp.on("error", (err) => this.log(`UDP socket error: ${err.message}`));
     }
-    this.udp.send(encodeOsc(address), this.port, this.host);
-    return "sent over UDP (TCP was down)";
+    return new Promise((resolve) => {
+      this.udp.send(encodeOsc(address), this.port, this.host, (err) => {
+        resolve(err ? `UDP send failed (TCP was down): ${err.message}` : "sent over UDP (TCP was down)");
+      });
+    });
   }
 
   stop() {
@@ -321,7 +325,9 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
   const label = cue != null ? `cue ${cue}` : `cue ID ${cueId}`;
   const qlab = new QLabLink({ host: qlabHost, port: qlabPort, path, workspace, passcode, log });
 
-  const clientId = `qlab-${os.hostname()}`.slice(0, 32);
+  // Stable across restarts (so the Screens panel doesn't collect stale entries)
+  // but distinct for each cue, so two bridges on one Mac show separately
+  const clientId = `qlab-${crypto.createHash("sha256").update(`${os.hostname()}\n${path}`).digest("hex").slice(0, 16)}`;
   const clientName = name ?? `QLab bridge (${label})`;
 
   let ws = null;
@@ -336,6 +342,7 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
 
   // Scheduling
   let timer = null;
+  let generation = 0; // bumped on every (re)arm, so an older spin loop stops
   let armedFor = null; // server time of the zero we're waiting for
   let firedKey = null; // run (start time + position + speed) we've already fired for
 
@@ -413,6 +420,7 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
   }
 
   function disarm() {
+    generation++;
     clearTimeout(timer);
     timer = null;
     armedFor = null;
@@ -430,6 +438,11 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
     // Local time of zero, as a performance.now() value
     const localTarget = target - offset();
     const delay = localTarget - Date.now();
+    if (delay <= 0 && armedFor != null) {
+      // A clock update in the last moments moved zero just into the past
+      fire(key, performance.now() + delay);
+      return;
+    }
     if (delay <= 0) {
       // Joining long after zero (e.g. mid-piece) isn't worth a message
       if (delay > -5000) log(`Missed zero by ${(-delay).toFixed(0)} ms — not firing ${label}`);
@@ -440,11 +453,12 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
     const perfTarget = performance.now() + delay;
     const wasArmed = armedFor != null;
     clearTimeout(timer);
+    const mine = ++generation;
     armedFor = target;
     if (!wasArmed) log(`Armed: ${label} fires in ${(delay / 1000).toFixed(2)} s`);
 
     const spin = () => {
-      if (armedFor !== target) return;
+      if (generation !== mine) return;
       if (performance.now() >= perfTarget) fire(key, perfTarget);
       else setImmediate(spin);
     };

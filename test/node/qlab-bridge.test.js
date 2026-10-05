@@ -318,4 +318,17 @@ describe.concurrent("bridge", () => {
     const { clients } = await lead.next("clients");
     expect(clients).toContainEqual(expect.objectContaining({ name: "QLab bridge (cue 2)", role: "viewer" }));
   });
+
+  it("shows bridges for different cues as separate screens", async ({ bridgeFor, lead, logs }) => {
+    bridgeFor();
+    bridgeFor({ cue: "3" });
+    await ready(logs);
+    await waitFor(() => logs.filter((l) => l.startsWith("Connected")).length === 2);
+    await sleep(100);
+    lead.send({ type: "ping", t: Date.now(), rtt: null });
+    const { clients } = await lead.next("clients");
+    const bridges = clients.filter((c) => c.name.startsWith("QLab bridge"));
+    expect(bridges.map((c) => c.name).sort()).toEqual(["QLab bridge (cue 2)", "QLab bridge (cue 3)"]);
+    expect(new Set(bridges.map((c) => c.id)).size).toBe(2);
+  });
 });
