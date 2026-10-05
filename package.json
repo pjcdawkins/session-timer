@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p test/worker",
     "local": "node server.js",
     "show": "sh scripts/show.sh",
+    "qlab": "node qlab-bridge.mjs",
     "lint": "biome lint --error-on-warnings",
     "lint:fix": "biome lint --write",
     "test": "vitest run",

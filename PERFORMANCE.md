@@ -17,6 +17,21 @@
 - Space = Start, Esc = Pause. Reset needs two clicks. Show lock disables Pause too: only Start works while it is on.
 - Start begins a 5s count-in (or whatever start time is set): every screen washes amber, pulsing on each second with the count on the clock face, and flashes green at zero, so whoever didn't press Start notices it.
 
+## QLab (optional)
+
+To have QLab start a cue exactly when the timer reaches zero, run the bridge on the QLab Mac (it can follow the local server or the online one):
+
+```
+npm run qlab -- --cue 2 --passcode 1234
+npm run qlab -- --cue 2 --passcode 1234 --server https://timer.ligetiquartet.com
+```
+
+- In QLab, Workspace Settings → Network → OSC Access: give a passcode **View** and **Control** access (or allow them without a passcode and leave out `--passcode`).
+- Check the bridge prints `QLab ready: /cue/2 "<cue name>"` and `Connected to timer`, and that "QLab bridge (cue 2)" shows in the Screens panel. Keep its Terminal window open (and the Mac awake: `caffeinate -dims` alongside, or run it on the `npm run show` Mac).
+- It fires only when the timer crosses zero while running, i.e. after a count-in. Starting from 0 or later, or pausing before zero, doesn't fire it. It logs how precisely it fired.
+- Rehearse it: start from the count-in and listen for the cue on the green flash.
+- If QLab is on another Mac, add `--qlab <ip>` (port 53000 by default).
+
 ## Stage screens
 
 - Open `http://<laptop-ip>:8787/?name=Stage%20L` (the name appears in the lead's Screens panel; it can also be changed by tapping it).
