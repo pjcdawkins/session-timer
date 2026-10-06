@@ -814,7 +814,8 @@ body:not(.signed-in) #controls {
   width: 100%;
 }
 
-.highlight-toggle {
+.highlight-toggle,
+.qlab-toggle {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -827,7 +828,8 @@ body:not(.signed-in) #controls {
   cursor: pointer;
 }
 
-.highlight-toggle input[type="checkbox"] {
+.highlight-toggle input[type="checkbox"],
+.qlab-toggle input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   width: 16px;
@@ -841,12 +843,14 @@ body:not(.signed-in) #controls {
   transition: all 0.15s var(--ease-in-out);
 }
 
-.highlight-toggle input[type="checkbox"]:checked {
+.highlight-toggle input[type="checkbox"]:checked,
+.qlab-toggle input[type="checkbox"]:checked {
   background: var(--amber-dim);
   border-color: var(--amber);
 }
 
-.highlight-toggle input[type="checkbox"]:checked::after {
+.highlight-toggle input[type="checkbox"]:checked::after,
+.qlab-toggle input[type="checkbox"]:checked::after {
   content: '';
   position: absolute;
   left: 4.5px;
@@ -856,6 +860,26 @@ body:not(.signed-in) #controls {
   border: solid var(--bg-deep);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+
+/* ─── QLab Controls ─── */
+.qlab-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+}
+
+.qlab-toggle:not(:has(input:checked)) {
+  color: var(--red);
+}
+
+.qlab-hint {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .highlight-input {
@@ -1355,6 +1379,7 @@ body:not(.perform) .perform-only {
 }
 
 #lock-indicator,
+#qlab-indicator,
 #screens-summary {
   font-size: inherit;
   padding-left: 0.5rem;
@@ -1363,6 +1388,10 @@ body:not(.perform) .perform-only {
 
 #lock-indicator {
   color: var(--amber);
+}
+
+#qlab-indicator {
+  color: var(--red);
 }
 
 #screens-summary {

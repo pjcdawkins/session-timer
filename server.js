@@ -39,6 +39,8 @@ let state = {
   locked: false,
   // Where Start was pressed, so a count-in can be cancelled back to it
   startedFromMs: null,
+  // Whether a QLab bridge talks to QLab
+  qlab: true,
 };
 
 // Cancel is refused this close to zero (in real time), so that the QLab
@@ -46,7 +48,7 @@ let state = {
 const CANCEL_CUTOFF_MS = 500;
 
 // Commands refused while the show lock is on (it applies to every lead screen)
-const LOCKED_COMMANDS = new Set(["stop", "reset", "setSpeed", "setTime", "setHighlight"]);
+const LOCKED_COMMANDS = new Set(["stop", "reset", "setSpeed", "setTime", "setHighlight", "setQlab"]);
 
 // Persist state to disk so a crash/restart mid-performance resumes where it was.
 // startRealTimestamp is wall-clock time, so a running timer keeps its place.
@@ -285,7 +287,7 @@ wss.on("connection", (ws, req) => {
     if (msg?.type === "hello") {
       client.id = String(msg.id).slice(0, 32);
       client.name = String(msg.name).slice(0, 40);
-      client.role = msg.role === "lead" ? "lead" : "viewer";
+      client.role = msg.role === "lead" || msg.role === "qlab" ? msg.role : "viewer";
       return;
     }
 
@@ -438,6 +440,12 @@ wss.on("connection", (ws, req) => {
 
       case "setLock":
         state.locked = msg.locked === true;
+        broadcast();
+        break;
+
+      // Connect or disconnect the QLab bridge from QLab
+      case "setQlab":
+        state.qlab = msg.enabled === true;
         broadcast();
         break;
     }

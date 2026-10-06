@@ -33,6 +33,9 @@ const highlightInterval = document.getElementById("highlight-interval");
 const highlightOffset = document.getElementById("highlight-offset");
 
 const lockEnabled = document.getElementById("lock-enabled");
+const qlabControls = document.getElementById("qlab-controls");
+const qlabEnabled = document.getElementById("qlab-enabled");
+const qlabIndicator = document.getElementById("qlab-indicator");
 const lockable = document.getElementById("lockable");
 const btnReset = document.getElementById("btn-reset");
 const commandWarning = document.getElementById("command-warning");
@@ -101,6 +104,7 @@ let running = false;
 let lastState = null;
 // Declared early: restored state is applied during connect()
 let resetConfirmTimer = null;
+let bridgeKnown = false; // Whether a QLab bridge is in the Screens panel
 const CANCEL_ARM_MS = 1000;
 const CANCEL_CUTOFF_MS = 500; // Matches the server
 let performButtonMode = "start"; // "start" | "cancel" | "hidden"
@@ -239,6 +243,7 @@ function syncControls(state) {
   }
 
   applyLock(!!state.locked);
+  applyQlab();
 }
 for (const input of editableInputs) {
   input.addEventListener("input", () => { input.dataset.edited = "1"; });
@@ -358,6 +363,19 @@ lockEnabled.addEventListener("change", () => {
 });
 localStorage.removeItem("timer-lead-locked"); // Was a per-device setting
 
+// QLab: whether a QLab bridge talks to QLab (on by default). Turning it off
+// disconnects the bridge from QLab, so it won't fire, pause or stop the cue.
+// Shown once a bridge has joined, or while it is off so it can be turned on.
+function applyQlab() {
+  const on = lastState?.qlab !== false;
+  qlabEnabled.checked = on;
+  qlabControls.classList.toggle("hidden", on && !bridgeKnown);
+  qlabIndicator.classList.toggle("hidden", on);
+}
+qlabEnabled.addEventListener("change", () => {
+  if (!command({ type: "setQlab", enabled: qlabEnabled.checked })) applyQlab();
+});
+
 // Connected screens
 const KNOWN_SCREENS_KEY = "timer-known-screens";
 const LOST_AFTER = 10000;
@@ -411,7 +429,10 @@ function renderScreens(clients) {
         health === "ok" ? (c.rtt != null ? `${Math.round(c.rtt)} ms` : "connected") :
         health === "warn" ? `quiet ${formatAgo(ago)}` :
         `lost ${formatAgo(ago)} ago`;
-      const role = k.role !== "lead" ? null : c && !c.authenticated ? "lead · signed out" : "lead";
+      const role =
+        k.role === "lead" ? (c && !c.authenticated ? "lead · signed out" : "lead") :
+        k.role === "qlab" ? (lastState?.qlab === false ? "QLab · off" : "QLab") :
+        null;
       return { name: k.name, role, health, detail };
     })
     // Other leads first, then viewers
@@ -439,6 +460,8 @@ function renderScreens(clients) {
     return li;
   }));
   screensEmpty.classList.toggle("hidden", rows.length > 0);
+  bridgeKnown = [...knownScreens.values()].some((k) => k.role === "qlab");
+  applyQlab();
 
   // Compact version for Perform mode: count, plus how many are quiet or lost
   // (in words as well as colour), coloured by the worst screen

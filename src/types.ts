@@ -16,9 +16,11 @@ export interface TimerState {
   locked: boolean;
   /** Where Start was pressed while running (null when paused): Cancel returns here */
   startedFromMs: number | null;
+  /** Whether a running QLab bridge talks to QLab (fires, pauses and stops the cue) */
+  qlab: boolean;
 }
 
-export type ClientRole = "viewer" | "lead";
+export type ClientRole = "viewer" | "lead" | "qlab";
 
 export interface ClientInfo {
   id: string;
@@ -41,7 +43,8 @@ export type ClientMessage =
   | { type: "setSpeed"; speed: number }
   | { type: "setTime"; virtualMs: number }
   | { type: "setHighlight"; highlight: { interval: number; offset: number } | null }
-  | { type: "setLock"; locked: boolean };
+  | { type: "setLock"; locked: boolean }
+  | { type: "setQlab"; enabled: boolean };
 
 export type ServerMessage =
   | { type: "state"; state: TimerState }

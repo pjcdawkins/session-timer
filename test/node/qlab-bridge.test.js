@@ -8,6 +8,7 @@ import {
   cuePath,
   decodeOsc,
   encodeOsc,
+  formatPosition,
   slipDecoder,
   slipEncode,
   zeroAt,
@@ -72,6 +73,18 @@ describe("cuePath", () => {
   });
 });
 
+describe("formatPosition", () => {
+  test.for([
+    [-5000, "-0:05"],
+    [0, "0:00"],
+    [83_400, "1:23.4"],
+    [600_000, "10:00"],
+    [-59_960, "-1:00"],
+  ])("%d → %s", ([ms, text]) => {
+    expect(formatPosition(ms)).toBe(text);
+  });
+});
+
 describe("zeroAt", () => {
   const running = { running: true, speed: 1, accumulatedVirtualMs: -5000, startRealTimestamp: 1000 };
 
@@ -109,7 +122,7 @@ async function startFakeQLab({ cues = { 2: "Tape" }, passcode } = {}) {
         }
         if (msg.address === "/alwaysReply") return;
         if (!authorised) return reply({ status: "denied" });
-        const m = msg.address.match(/^\/cue\/([^/]+)\/(name|start)$/);
+        const m = msg.address.match(/^\/cue\/([^/]+)\/(name|start|pause|resume|stop)$/);
         if (!m || !(m[1] in cues)) return reply({ status: "error" });
         reply(m[2] === "name" ? { status: "ok", data: cues[m[1]] } : { status: "ok" });
       }),
@@ -123,6 +136,9 @@ async function startFakeQLab({ cues = { 2: "Tape" }, passcode } = {}) {
     port: srv.address().port,
     received,
     starts: () => received.filter((m) => m.address.endsWith("/start")),
+    /** Cue commands received, e.g. ["start", "pause"] */
+    actions: () => received.map((m) => m.address.match(/^\/cue\/[^/]+\/(start|pause|resume|stop)$/)?.[1]).filter(Boolean),
+    connections: () => sockets.size,
     close() {
       for (const s of sockets) s.destroy();
       return new Promise((resolve) => srv.close(resolve));
@@ -315,6 +331,148 @@ describe.concurrent("bridge", () => {
     }
   });
 
+  it("pauses the cue on Pause, resumes it on Start, and stops it on Reset", async ({ bridgeFor, lead, qlab, logs }) => {
+    bridgeFor();
+    await ready(logs);
+    lead.send({ type: "setTime", virtualMs: -300 });
+    await lead.flush();
+    lead.send({ type: "start" });
+    await waitFor(() => qlab.starts().length > 0);
+    await sleep(200);
+
+    const pausedAt = Date.now();
+    lead.send({ type: "stop" });
+    await waitFor(() => qlab.actions().length === 2);
+    expect(qlab.actions()).toEqual(["start", "pause"]);
+    // Straight away: one hop to the server, one to the bridge, one to QLab
+    expect(qlab.received.find((m) => m.address === "/cue/2/pause").at - pausedAt).toBeLessThan(25);
+    await waitFor(() => logs.some((l) => l.startsWith("Paused")));
+    expect(logs.find((l) => l.startsWith("Paused"))).toMatch(/^Paused cue 2 \(timer paused at 0:00\.\d\) — QLab: ok$/);
+
+    lead.send({ type: "start" });
+    await waitFor(() => qlab.actions().length === 3);
+    expect(qlab.actions()[2]).toBe("resume");
+
+    // Reset while running stops it
+    lead.send({ type: "reset" });
+    await waitFor(() => qlab.actions().length === 4);
+    expect(qlab.actions()[3]).toBe("stop");
+
+    // Nothing more once stopped; the next count-in fires it again
+    lead.send({ type: "setTime", virtualMs: -300 });
+    await lead.flush();
+    await sleep(100);
+    expect(qlab.actions()).toHaveLength(4);
+    lead.send({ type: "start" });
+    await waitFor(() => qlab.actions().length === 5);
+    expect(qlab.actions()[4]).toBe("start");
+  });
+
+  it("stops a paused cue on Reset or a new start time", async ({ bridgeFor, lead, qlab, logs }) => {
+    bridgeFor();
+    await ready(logs);
+    for (const move of [{ type: "reset" }, { type: "setTime", virtualMs: 30_000 }]) {
+      lead.send({ type: "setTime", virtualMs: -300 });
+      await lead.flush();
+      lead.send({ type: "start" });
+      await waitFor(() => qlab.actions().at(-1) === "start");
+      await sleep(100);
+      lead.send({ type: "stop" });
+      await waitFor(() => qlab.actions().at(-1) === "pause");
+      lead.send(move);
+      await waitFor(() => qlab.actions().at(-1) === "stop");
+    }
+    // Starting again from the new time doesn't resume it
+    lead.send({ type: "start" });
+    await lead.next((m) => m.type === "state" && m.state.running);
+    await sleep(200);
+    expect(qlab.actions()).toEqual(["start", "pause", "stop", "start", "pause", "stop"]);
+  });
+
+  it("leaves the cue alone when paused, cancelled or reset before zero", async ({ bridgeFor, lead, qlab, logs }) => {
+    bridgeFor();
+    await ready(logs);
+    lead.send({ type: "setTime", virtualMs: -2000 });
+    await lead.flush();
+    lead.send({ type: "start" });
+    await waitFor(() => logs.some((l) => l.startsWith("Armed")));
+    lead.send({ type: "stop" });
+    await lead.flush();
+    lead.send({ type: "start" });
+    await lead.flush();
+    lead.send({ type: "cancel" });
+    await lead.flush();
+    lead.send({ type: "reset" });
+    await lead.flush();
+    await sleep(200);
+    expect(qlab.actions()).toEqual([]);
+  });
+
+  it("disconnects from QLab when turned off, and reconnects when turned on", async ({ bridgeFor, lead, qlab, logs }) => {
+    const bridge = bridgeFor();
+    await ready(logs);
+    expect(qlab.connections()).toBe(1);
+
+    lead.send({ type: "setTime", virtualMs: -1000 });
+    await lead.flush();
+    lead.send({ type: "start" });
+    await waitFor(() => logs.some((l) => l.startsWith("Armed")));
+    lead.send({ type: "setQlab", enabled: false });
+    await waitFor(() => qlab.connections() === 0);
+    expect(bridge.qlabEnabled).toBe(false);
+    expect(logs).toContain("Disarmed (QLab turned off from the lead page)");
+    await sleep(1200);
+    expect(qlab.actions()).toEqual([]);
+
+    // A cue already passed zero isn't fired late when turned back on
+    lead.send({ type: "setQlab", enabled: true });
+    await waitFor(() => qlab.connections() === 1);
+    await waitFor(() => logs.filter((l) => l.startsWith("QLab ready")).length === 2);
+    lead.send({ type: "stop" });
+    await lead.flush();
+    await sleep(100);
+    expect(qlab.actions()).toEqual([]);
+
+    lead.send({ type: "setTime", virtualMs: -300 });
+    await lead.flush();
+    lead.send({ type: "start" });
+    await waitFor(() => qlab.starts().length === 1);
+  });
+
+  it("leaves a cue it started alone while turned off", async ({ bridgeFor, lead, qlab, logs }) => {
+    bridgeFor();
+    await ready(logs);
+    lead.send({ type: "setTime", virtualMs: -300 });
+    await lead.flush();
+    lead.send({ type: "start" });
+    await waitFor(() => qlab.starts().length === 1);
+    lead.send({ type: "setQlab", enabled: false });
+    await waitFor(() => qlab.connections() === 0);
+    lead.send({ type: "stop" });
+    await lead.flush();
+    lead.send({ type: "setQlab", enabled: true });
+    await waitFor(() => qlab.connections() === 1);
+    lead.send({ type: "start" });
+    await lead.flush();
+    lead.send({ type: "reset" });
+    await lead.flush();
+    await sleep(200);
+    expect(qlab.actions()).toEqual(["start"]);
+  });
+
+  it("starts disconnected if QLab is already turned off", async ({ bridgeFor, lead, qlab, logs }) => {
+    lead.send({ type: "setQlab", enabled: false });
+    await lead.next("state");
+    bridgeFor();
+    await waitFor(() => logs.some((l) => l.startsWith("Connected")) && logs.some((l) => l.startsWith("QLab turned off")));
+    await waitFor(() => qlab.connections() === 0);
+    lead.send({ type: "setTime", virtualMs: -300 });
+    await lead.flush();
+    lead.send({ type: "start" });
+    await sleep(600);
+    expect(qlab.actions()).toEqual([]);
+  });
+
   it("says when the cue isn't in QLab", async ({ bridgeFor, logs }) => {
     bridgeFor({ cue: "9" });
     await waitFor(() => logs.some((l) => l.includes("can't find /cue/9")));
@@ -378,7 +536,7 @@ describe.concurrent("bridge", () => {
     await ready(logs);
     lead.send({ type: "ping", t: Date.now(), rtt: null });
     const { clients } = await lead.next("clients");
-    expect(clients).toContainEqual(expect.objectContaining({ name: "QLab bridge (cue 2)", role: "viewer" }));
+    expect(clients).toContainEqual(expect.objectContaining({ name: "QLab bridge (cue 2)", role: "qlab" }));
   });
 
   it("shows bridges for different cues as separate screens", async ({ bridgeFor, lead, logs }) => {

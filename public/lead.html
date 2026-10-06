@@ -47,6 +47,7 @@
       <span class="dot" id="connection-dot"></span>
       <span id="status-text">STOPPED</span>
       <span id="lock-indicator" class="perform-only hidden">Locked</span>
+      <span id="qlab-indicator" class="perform-only hidden">QLab off</span>
       <span id="screens-summary" class="perform-only">
         <span class="screen-dot"></span>
         <span id="screens-summary-text">No screens</span>
@@ -125,6 +126,14 @@
             <span>sec offset</span>
             <input type="number" id="highlight-offset" min="0" max="59" value="0" class="highlight-input">
           </label>
+        </div>
+
+        <div class="qlab-controls hidden" id="qlab-controls">
+          <label class="qlab-toggle" title="Turn off to disconnect the QLab bridge from QLab">
+            <input type="checkbox" id="qlab-enabled" checked>
+            <span>QLab connected</span>
+          </label>
+          <span class="qlab-hint">Cue fires at zero; Pause, Start and Reset pause, resume and stop it</span>
         </div>
       </fieldset>
 

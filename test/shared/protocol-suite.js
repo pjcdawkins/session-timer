@@ -43,6 +43,7 @@ export function defineProtocolTests(it) {
         highlight: { interval: 10, offset: 0 },
         locked: false,
         startedFromMs: null,
+        qlab: true,
       });
       expect(state.serverNow).toBeGreaterThanOrEqual(before - 1000);
       c.close();
@@ -85,6 +86,7 @@ export function defineProtocolTests(it) {
         { type: "setTime", virtualMs: 0 },
         { type: "setHighlight", highlight: null },
         { type: "setLock", locked: true },
+        { type: "setQlab", enabled: false },
       ]) {
         c.send(cmd);
         expect(await c.next("error")).toEqual({ type: "error", message: "Not authenticated" });
@@ -519,6 +521,7 @@ export function defineProtocolTests(it) {
       { type: "setSpeed", speed: 2 },
       { type: "setTime", virtualMs: 0 },
       { type: "setHighlight", highlight: null },
+      { type: "setQlab", enabled: false },
     ])("refuses $type while locked", async (cmd, { backend }) => {
       const lead = await lockedLead(backend);
       lead.send(cmd);
@@ -564,6 +567,28 @@ export function defineProtocolTests(it) {
     });
   });
 
+  describe("setQlab", () => {
+    it("turns QLab off and on for every client", async ({ backend }) => {
+      const lead = await connectLead(backend);
+      const viewer = await backend.connect();
+      await viewer.next("state");
+      lead.send({ type: "setQlab", enabled: false });
+      expect((await lead.next("state")).state.qlab).toBe(false);
+      expect((await viewer.next("state")).state.qlab).toBe(false);
+      lead.send({ type: "setQlab", enabled: true });
+      expect((await lead.next("state")).state.qlab).toBe(true);
+      lead.close();
+      viewer.close();
+    });
+
+    it("only turns on for an explicit true", async ({ backend }) => {
+      const lead = await connectLead(backend);
+      lead.send({ type: "setQlab", enabled: "yes" });
+      expect((await lead.next("state")).state.qlab).toBe(false);
+      lead.close();
+    });
+  });
+
   describe("screens list", () => {
     it("is sent to authenticated leads with each pong", async ({ backend }) => {
       const lead = await connectLead(backend);
@@ -572,6 +597,9 @@ export function defineProtocolTests(it) {
       viewer.send({ type: "hello", id: "viewer-1", name: "x".repeat(100), role: "admin" });
       viewer.send({ type: "ping", t: 1, rtt: 42 });
       await viewer.next("pong");
+      const bridge = await backend.connect();
+      bridge.send({ type: "hello", id: "qlab-1", name: "QLab bridge (cue 2)", role: "qlab" });
+      await bridge.flush();
 
       lead.send({ type: "ping", t: 2, rtt: 7 });
       await lead.next("pong");
@@ -581,12 +609,14 @@ export function defineProtocolTests(it) {
       // Name truncated to 40 chars, unknown roles become viewer
       expect(byId["viewer-1"]).toMatchObject({ name: "x".repeat(40), role: "viewer", authenticated: false, rtt: 42 });
       expect(byId["viewer-1"].lastSeenAgoMs).toBeGreaterThanOrEqual(0);
+      expect(byId["qlab-1"]).toMatchObject({ name: "QLab bridge (cue 2)", role: "qlab", authenticated: false });
 
       // Viewers never receive the list
       await viewer.flush();
       expect(viewer.pending("clients")).toEqual([]);
       lead.close();
       viewer.close();
+      bridge.close();
     });
   });
 
@@ -598,6 +628,8 @@ export function defineProtocolTests(it) {
       lead.send({ type: "setTime", virtualMs: 42_000 });
       await lead.next("state");
       lead.send({ type: "setHighlight", highlight: null });
+      await lead.next("state");
+      lead.send({ type: "setQlab", enabled: false });
       await lead.next("state");
       lead.send({ type: "setLock", locked: true });
       await lead.next("state");
@@ -613,6 +645,7 @@ export function defineProtocolTests(it) {
         accumulatedVirtualMs: 42_000,
         highlight: null,
         locked: true,
+        qlab: false,
       });
       c.close();
     });

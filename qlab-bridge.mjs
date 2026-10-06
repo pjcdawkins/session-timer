@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// QLab bridge: fires a QLab cue at the moment the timer reaches zero.
+// QLab bridge: fires a QLab cue at the moment the timer reaches zero, then
+// pauses, resumes and stops it as the lead pauses, restarts and resets the
+// timer. The lead page can turn QLab off, which disconnects the bridge from it.
 //
 // Joins the timer (local server or the online one) as a screen, keeps its clock
 // in sync the same way the browser screens do, and sends an OSC message to QLab
@@ -149,6 +151,7 @@ const QLAB_REPLY_TIMEOUT_MS = 1500;
  * If TCP is down when a cue must fire, falls back to UDP to the same port.
  * QLab authorises a passcode per connection, and for UDP per sending socket,
  * so the UDP socket sends /connect too and keeps it fresh, ready for that.
+ * The lead can turn it off (setEnabled), which closes the connection.
  */
 class QLabLink {
   constructor({ host, port, path, workspace, passcode, log }) {
@@ -158,6 +161,7 @@ class QLabLink {
     this.pending = new Map(); // reply address → [resolve]
     this.lastStatus = null;
     this.stopped = false;
+    this.enabled = true;
     this.udp = dgram.createSocket("udp4");
     this.udp.on("error", (err) => this.log(`UDP socket error: ${err.message}`));
     this.connect();
@@ -174,12 +178,12 @@ class QLabLink {
 
   /** Authorise the UDP fallback socket with the passcode (QLab replies to port 53001, which we don't need). */
   udpConnect() {
-    if (this.passcode == null || this.stopped) return;
+    if (this.passcode == null || this.stopped || !this.enabled) return;
     this.udp.send(encodeOsc(this.connectAddress(), [this.passcode]), this.port, this.host);
   }
 
   connect() {
-    if (this.stopped) return;
+    if (this.stopped || !this.enabled || this.socket) return;
     const socket = net.connect({ host: this.host, port: this.port });
     this.socket = socket;
     socket.setNoDelay(true);
@@ -201,10 +205,33 @@ class QLabLink {
       this.socket = null;
       if (this.stopped) return;
       this.report("unreachable", `QLab not reachable at ${this.host}:${this.port} (is it running?) — retrying`);
-      for (const resolvers of this.pending.values()) for (const r of resolvers) r(null);
-      this.pending.clear();
+      this.dropPending();
       setTimeout(() => this.connect(), QLAB_RECONNECT_MS);
     });
+  }
+
+  dropPending() {
+    for (const resolvers of this.pending.values()) for (const r of resolvers) r(null);
+    this.pending.clear();
+  }
+
+  /** Connect to QLab, or disconnect and leave it alone until turned on again. */
+  setEnabled(on) {
+    if (on === this.enabled || this.stopped) return;
+    this.enabled = on;
+    if (on) {
+      this.lastStatus = null;
+      this.log("QLab turned on from the lead page — connecting");
+      this.connect();
+      this.udpConnect();
+      return;
+    }
+    const socket = this.socket;
+    this.socket = null;
+    this.connected = false;
+    socket?.destroy();
+    this.dropPending();
+    this.report("off", "QLab turned off from the lead page — disconnected (the cue won't be fired, paused or stopped)");
   }
 
   onPacket(packet) {
@@ -271,9 +298,13 @@ class QLabLink {
     this.log(message);
   }
 
-  /** Start the cue. Resolves with QLab's reply status, or how the UDP send went. */
-  async start() {
-    const address = `${this.path}/start`;
+  /**
+   * Start, pause, resume or stop the cue. Resolves with QLab's reply status,
+   * or how the UDP send went.
+   */
+  async cue(action) {
+    if (!this.enabled) return "not sent (QLab is turned off)";
+    const address = `${this.path}/${action}`;
     if (this.connected) {
       const reply = await this.request(address);
       return reply?.status ?? "no reply";
@@ -315,6 +346,15 @@ export function zeroAt(state) {
   if (!state?.running || state.startRealTimestamp == null) return null;
   if (state.accumulatedVirtualMs >= 0) return null;
   return state.startRealTimestamp - state.accumulatedVirtualMs / state.speed;
+}
+
+/** A virtual position for the log, e.g. "-0:05" or "1:23.4". */
+export function formatPosition(ms) {
+  const sign = ms < 0 ? "-" : "";
+  const tenths = Math.round(Math.abs(ms) / 100);
+  const s = Math.floor(tenths / 10);
+  const frac = tenths % 10 ? `.${tenths % 10}` : "";
+  return `${sign}${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}${frac}`;
 }
 
 function wsUrl(server) {
@@ -362,6 +402,10 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
   let armedKey = null; // and the run it belongs to
   let firedKey = null; // run (start time + position + speed) we've already fired for
 
+  // The cue as far as the bridge knows: null (not started by us, or stopped),
+  // { playing: true }, or { pausedAt } (the timer position it was paused at)
+  let cueState = null;
+
   const best = () => (samples.length ? samples.reduce((a, b) => (b.rtt < a.rtt ? b : a)) : null);
   const offset = () => best()?.offset ?? fallbackOffset;
 
@@ -378,7 +422,7 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
       if (ws !== socket) return;
       lastMessageAt = Date.now();
       samples = [];
-      send({ type: "hello", id: clientId, name: clientName, role: "viewer" });
+      send({ type: "hello", id: clientId, name: clientName, role: "qlab" });
       ping();
       pingTimer = setInterval(() => {
         if (Date.now() - lastMessageAt > DEAD_AFTER) drop(socket);
@@ -401,6 +445,9 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
       if (msg.type === "state") {
         fallbackOffset = msg.state.serverNow - receivedAt;
         state = msg.state;
+        qlab.setEnabled(state.qlab !== false);
+        if (!qlab.enabled) cueState = null; // Left alone while off, so no longer ours to pause
+        followCue();
         schedule();
       } else if (msg.type === "pong") {
         const rtt = receivedAt - msg.t;
@@ -443,8 +490,50 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
     armedKey = null;
   }
 
+  /**
+   * Make a cue we started follow the timer: Pause pauses it, Start resumes it
+   * from there, and Reset (or setting another time) stops it, since it can't
+   * follow a jump.
+   */
+  function followCue() {
+    if (!cueState) return;
+    const position = state.accumulatedVirtualMs;
+    if (cueState.playing) {
+      if (state.running) return;
+      if (position > 0) {
+        cueState = { pausedAt: position };
+        cueAction("pause", "Paused", `timer paused at ${formatPosition(position)}`);
+      } else {
+        cueState = null;
+        cueAction("stop", "Stopped", `timer reset to ${formatPosition(position)}`);
+      }
+    } else if (state.running) {
+      const from = state.startedFromMs ?? position;
+      if (from === cueState.pausedAt) {
+        cueState = { playing: true };
+        cueAction("resume", "Resumed", `timer started at ${formatPosition(from)}`);
+      } else {
+        cueState = null;
+        cueAction("stop", "Stopped", `timer started from ${formatPosition(from)}, not where it was paused`);
+      }
+    } else if (position !== cueState.pausedAt) {
+      cueState = null;
+      cueAction("stop", "Stopped", `timer reset or set to ${formatPosition(position)}`);
+    }
+  }
+
+  async function cueAction(action, verb, why) {
+    const status = await qlab.cue(action);
+    log(`${verb} ${label} (${why}) — QLab: ${status}`);
+  }
+
   /** (Re)arm for the next zero from the current state and clock offset. */
   function schedule() {
+    if (!qlab.enabled) {
+      if (armedFor != null) log("Disarmed (QLab turned off from the lead page)");
+      disarm();
+      return;
+    }
     const target = zeroAt(state);
     const key = state && `${state.startRealTimestamp}:${state.accumulatedVirtualMs}:${state.speed}`;
     if (target == null || key === firedKey) {
@@ -487,7 +576,8 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
     const late = performance.now() - perfTarget;
     firedKey = key;
     disarm();
-    const status = await qlab.start();
+    cueState = { playing: true };
+    const status = await qlab.cue("start");
     log(`Fired ${label} at zero (${late.toFixed(1)} ms after) — QLab: ${status}`);
   }
 
@@ -499,6 +589,9 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
     },
     get clockOffset() {
       return offset();
+    },
+    get qlabEnabled() {
+      return qlab.enabled;
     },
     stop() {
       stopped = true;
@@ -517,7 +610,8 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
 
 const USAGE = `Usage: node qlab-bridge.mjs --cue <number> [options]
 
-Fires a QLab cue when the timer reaches zero.
+Fires a QLab cue when the timer reaches zero; Pause, Start and Reset on the
+lead page then pause, resume and stop it. The lead page can also turn QLab off.
 
   --cue <number>       QLab cue number, e.g. 2, 2a, 1.5
   --cue-id <id>        QLab cue unique ID (instead of --cue)

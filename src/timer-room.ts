@@ -10,6 +10,8 @@ interface InternalState {
   locked: boolean;
   // Where Start was pressed, so a count-in can be cancelled back to it
   startedFromMs: number | null;
+  // Whether a QLab bridge talks to QLab
+  qlab: boolean;
 }
 
 interface Attachment {
@@ -36,6 +38,7 @@ const DEFAULT_STATE: InternalState = {
   highlight: { interval: 10, offset: 0 },
   locked: false,
   startedFromMs: null,
+  qlab: true,
 };
 
 // Auth throttle: each IP gets one password check per AUTH_INTERVAL_MS. Extra
@@ -88,7 +91,7 @@ function constantTimeEqual(a: string, b: string): boolean {
 const CANCEL_CUTOFF_MS = 500;
 
 // Commands refused while the show lock is on (it applies to every lead screen)
-const LOCKED_COMMANDS = new Set(["stop", "reset", "setSpeed", "setTime", "setHighlight"]);
+const LOCKED_COMMANDS = new Set(["stop", "reset", "setSpeed", "setTime", "setHighlight", "setQlab"]);
 
 export class TimerRoom extends DurableObject<Env> {
   private state: InternalState = { ...DEFAULT_STATE };
@@ -139,6 +142,7 @@ export class TimerRoom extends DurableObject<Env> {
         this.state.highlight = this.state.highlight ?? null;
         this.state.locked = this.state.locked ?? false;
         this.state.startedFromMs = this.state.startedFromMs ?? null;
+        this.state.qlab = this.state.qlab ?? true;
       }
       this.ctx.setWebSocketAutoResponse(
         new WebSocketRequestResponsePair("ping", "pong")
@@ -190,7 +194,7 @@ export class TimerRoom extends DurableObject<Env> {
     if (msg.type === "hello") {
       attachment.id = String(msg.id).slice(0, 32);
       attachment.name = String(msg.name).slice(0, 40);
-      attachment.role = msg.role === "lead" ? "lead" : "viewer";
+      attachment.role = msg.role === "lead" || msg.role === "qlab" ? msg.role : "viewer";
       ws.serializeAttachment(attachment);
       return;
     }
@@ -369,6 +373,13 @@ export class TimerRoom extends DurableObject<Env> {
         await this.persist();
         this.broadcast();
         break;
+
+      // Connect or disconnect the QLab bridge from QLab
+      case "setQlab":
+        this.state.qlab = msg.enabled === true;
+        await this.persist();
+        this.broadcast();
+        break;
     }
   }
 
@@ -426,6 +437,7 @@ export class TimerRoom extends DurableObject<Env> {
       highlight: this.state.highlight,
       locked: this.state.locked,
       startedFromMs: this.state.startedFromMs,
+      qlab: this.state.qlab,
     };
   }
 
