@@ -14,6 +14,8 @@ export interface TimerState {
   serverNow: number;
   highlight: { interval: number; offset: number } | null;
   locked: boolean;
+  /** Where Start was pressed while running (null when paused): Cancel returns here */
+  startedFromMs: number | null;
 }
 
 export type ClientRole = "viewer" | "lead";
@@ -33,6 +35,7 @@ export type ClientMessage =
   | { type: "auth"; password?: string; token?: string }
   | { type: "logout" }
   | { type: "start" }
+  | { type: "cancel" }
   | { type: "stop" }
   | { type: "reset" }
   | { type: "setSpeed"; speed: number }

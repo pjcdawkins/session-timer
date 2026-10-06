@@ -42,6 +42,7 @@ export function defineProtocolTests(it) {
         startRealTimestamp: null,
         highlight: { interval: 10, offset: 0 },
         locked: false,
+        startedFromMs: null,
       });
       expect(state.serverNow).toBeGreaterThanOrEqual(before - 1000);
       c.close();
@@ -77,6 +78,7 @@ export function defineProtocolTests(it) {
       await c.next("state");
       for (const cmd of [
         { type: "start" },
+        { type: "cancel" },
         { type: "stop" },
         { type: "reset" },
         { type: "setSpeed", speed: 2 },
@@ -332,6 +334,80 @@ export function defineProtocolTests(it) {
     });
   });
 
+  describe("cancel", () => {
+    it("during the count-in returns to where Start was pressed", async ({ backend }) => {
+      const lead = await connectLead(backend);
+      lead.send({ type: "setTime", virtualMs: -3000 });
+      await lead.next("state");
+      lead.send({ type: "start" });
+      expect((await lead.next("state")).state).toMatchObject({ running: true, startedFromMs: -3000 });
+      await sleep(100);
+      lead.send({ type: "cancel" });
+      const { state } = await lead.next("state");
+      expect(state).toMatchObject({
+        running: false,
+        accumulatedVirtualMs: -3000,
+        startRealTimestamp: null,
+        startedFromMs: null,
+      });
+      lead.close();
+    });
+
+    it("returns to the Start position after a speed change mid count-in", async ({ backend }) => {
+      const lead = await connectLead(backend);
+      lead.send({ type: "start" });
+      await lead.next("state");
+      await sleep(50);
+      lead.send({ type: "setSpeed", speed: 2 });
+      expect((await lead.next("state")).state.startedFromMs).toBe(DEFAULT_START_MS);
+      lead.send({ type: "cancel" });
+      expect((await lead.next("state")).state).toMatchObject({ running: false, accumulatedVirtualMs: DEFAULT_START_MS, speed: 2 });
+      lead.close();
+    });
+
+    it("is allowed under Show lock", async ({ backend }) => {
+      const lead = await connectLead(backend);
+      lead.send({ type: "setLock", locked: true });
+      await lead.next("state");
+      lead.send({ type: "start" });
+      await lead.next("state");
+      lead.send({ type: "cancel" });
+      expect((await lead.next("state")).state).toMatchObject({ running: false, accumulatedVirtualMs: DEFAULT_START_MS, locked: true });
+      lead.close();
+    });
+
+    it.for([
+      { at: "in the last 500ms before zero", from: -400 },
+      { at: "after zero", from: 0 },
+    ])("is refused $at", async ({ from }, { backend }) => {
+      const lead = await connectLead(backend);
+      lead.send({ type: "setTime", virtualMs: from });
+      await lead.next("state");
+      lead.send({ type: "start" });
+      await lead.next("state");
+      lead.send({ type: "cancel" });
+      expect(await lead.next("error")).toEqual({ type: "error", message: "Too close to zero to cancel" });
+      await lead.flush();
+      expect(lead.pending("state")).toEqual([]);
+      lead.close();
+    });
+
+    it("is a no-op while paused, and after Pause", async ({ backend }) => {
+      const lead = await connectLead(backend);
+      lead.send({ type: "cancel" });
+      await lead.flush();
+      expect(lead.pending("state")).toEqual([]);
+      lead.send({ type: "start" });
+      await lead.next("state");
+      lead.send({ type: "stop" });
+      expect((await lead.next("state")).state.startedFromMs).toBeNull();
+      lead.send({ type: "cancel" });
+      await lead.flush();
+      expect(lead.pending("state")).toEqual([]);
+      lead.close();
+    });
+  });
+
   describe("setSpeed", () => {
     it("changes speed while paused", async ({ backend }) => {
       const lead = await connectLead(backend);
@@ -553,6 +629,7 @@ export function defineProtocolTests(it) {
       const { state } = await c.next("state");
       expect(state.running).toBe(true);
       expect(state.startRealTimestamp).toBe(started.startRealTimestamp);
+      expect(state.startedFromMs).toBe(DEFAULT_START_MS);
       c.close();
     });
   });

@@ -37,7 +37,13 @@ let state = {
   startRealTimestamp: null,
   highlight: { interval: 10, offset: 0 },
   locked: false,
+  // Where Start was pressed, so a count-in can be cancelled back to it
+  startedFromMs: null,
 };
+
+// Cancel is refused this close to zero (in real time), so that the QLab
+// bridge hears about an accepted cancel before it would fire the cue
+const CANCEL_CUTOFF_MS = 500;
 
 // Commands refused while the show lock is on (it applies to every lead screen)
 const LOCKED_COMMANDS = new Set(["stop", "reset", "setSpeed", "setTime", "setHighlight"]);
@@ -71,6 +77,11 @@ function accumulate() {
   const now = Date.now();
   const realElapsed = now - state.startRealTimestamp;
   state.accumulatedVirtualMs += realElapsed * state.speed;
+}
+
+function currentVirtualMs() {
+  if (state.startRealTimestamp === null) return state.accumulatedVirtualMs;
+  return state.accumulatedVirtualMs + (Date.now() - state.startRealTimestamp) * state.speed;
 }
 
 function buildTimerState() {
@@ -339,6 +350,23 @@ wss.on("connection", (ws, req) => {
         if (!state.running) {
           state.running = true;
           state.startRealTimestamp = Date.now();
+          state.startedFromMs = state.accumulatedVirtualMs;
+          broadcast();
+        }
+        break;
+
+      // Undo Start during the count-in (allowed under Show lock): back to
+      // where Start was pressed. Refused from CANCEL_CUTOFF_MS before zero.
+      case "cancel":
+        if (state.running && state.startedFromMs !== null) {
+          if (-currentVirtualMs() / state.speed < CANCEL_CUTOFF_MS) {
+            ws.send(JSON.stringify({ type: "error", message: "Too close to zero to cancel" }));
+            return;
+          }
+          state.running = false;
+          state.accumulatedVirtualMs = state.startedFromMs;
+          state.startRealTimestamp = null;
+          state.startedFromMs = null;
           broadcast();
         }
         break;
@@ -348,6 +376,7 @@ wss.on("connection", (ws, req) => {
           accumulate();
           state.running = false;
           state.startRealTimestamp = null;
+          state.startedFromMs = null;
           broadcast();
         }
         break;
@@ -356,6 +385,7 @@ wss.on("connection", (ws, req) => {
         state.running = false;
         state.accumulatedVirtualMs = DEFAULT_START_MS;
         state.startRealTimestamp = null;
+        state.startedFromMs = null;
         broadcast();
         break;
 

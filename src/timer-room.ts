@@ -8,6 +8,8 @@ interface InternalState {
   startRealTimestamp: number | null;
   highlight: { interval: number; offset: number } | null;
   locked: boolean;
+  // Where Start was pressed, so a count-in can be cancelled back to it
+  startedFromMs: number | null;
 }
 
 interface Attachment {
@@ -33,6 +35,7 @@ const DEFAULT_STATE: InternalState = {
   startRealTimestamp: null,
   highlight: { interval: 10, offset: 0 },
   locked: false,
+  startedFromMs: null,
 };
 
 // Auth throttle: each IP gets one password check per AUTH_INTERVAL_MS. Extra
@@ -79,6 +82,10 @@ function constantTimeEqual(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+// Cancel is refused this close to zero (in real time), so that the QLab
+// bridge hears about an accepted cancel before it would fire the cue
+const CANCEL_CUTOFF_MS = 500;
 
 // Commands refused while the show lock is on (it applies to every lead screen)
 const LOCKED_COMMANDS = new Set(["stop", "reset", "setSpeed", "setTime", "setHighlight"]);
@@ -131,6 +138,7 @@ export class TimerRoom extends DurableObject<Env> {
         this.state = stored;
         this.state.highlight = this.state.highlight ?? null;
         this.state.locked = this.state.locked ?? false;
+        this.state.startedFromMs = this.state.startedFromMs ?? null;
       }
       this.ctx.setWebSocketAutoResponse(
         new WebSocketRequestResponsePair("ping", "pong")
@@ -262,6 +270,24 @@ export class TimerRoom extends DurableObject<Env> {
         if (!this.state.running) {
           this.state.running = true;
           this.state.startRealTimestamp = Date.now();
+          this.state.startedFromMs = this.state.accumulatedVirtualMs;
+          await this.persist();
+          this.broadcast();
+        }
+        break;
+
+      // Undo Start during the count-in (allowed under Show lock): back to
+      // where Start was pressed. Refused from CANCEL_CUTOFF_MS before zero.
+      case "cancel":
+        if (this.state.running && this.state.startedFromMs !== null) {
+          if (-this.currentVirtualMs() / this.state.speed < CANCEL_CUTOFF_MS) {
+            ws.send(JSON.stringify({ type: "error", message: "Too close to zero to cancel" }));
+            return;
+          }
+          this.state.running = false;
+          this.state.accumulatedVirtualMs = this.state.startedFromMs;
+          this.state.startRealTimestamp = null;
+          this.state.startedFromMs = null;
           await this.persist();
           this.broadcast();
         }
@@ -272,6 +298,7 @@ export class TimerRoom extends DurableObject<Env> {
           this.accumulate();
           this.state.running = false;
           this.state.startRealTimestamp = null;
+          this.state.startedFromMs = null;
           await this.persist();
           this.broadcast();
         }
@@ -281,6 +308,7 @@ export class TimerRoom extends DurableObject<Env> {
         this.state.running = false;
         this.state.accumulatedVirtualMs = DEFAULT_START_MS;
         this.state.startRealTimestamp = null;
+        this.state.startedFromMs = null;
         await this.persist();
         this.broadcast();
         break;
@@ -383,6 +411,11 @@ export class TimerRoom extends DurableObject<Env> {
     this.state.accumulatedVirtualMs += realElapsed * this.state.speed;
   }
 
+  private currentVirtualMs(): number {
+    if (this.state.startRealTimestamp === null) return this.state.accumulatedVirtualMs;
+    return this.state.accumulatedVirtualMs + (Date.now() - this.state.startRealTimestamp) * this.state.speed;
+  }
+
   private buildTimerState(): TimerState {
     return {
       running: this.state.running,
@@ -392,6 +425,7 @@ export class TimerRoom extends DurableObject<Env> {
       serverNow: Date.now(),
       highlight: this.state.highlight,
       locked: this.state.locked,
+      startedFromMs: this.state.startedFromMs,
     };
   }
 

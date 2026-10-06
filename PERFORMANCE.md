@@ -14,6 +14,7 @@
 - On mains power; disable automatic updates; Do Not Disturb on.
 - Lead page: `http://localhost:8787/lead`. A login lasts 24 hours after the screen was last used (an open lead page keeps renewing it), so check each lead screen is signed in during setup. Turn on **Show lock** once set up (it locks every lead screen, not just this one).
 - To perform from a lead screen (e.g. a phone), tap **Perform mode**: it hides the controls (apart from a Start button while stopped; there is no Pause), shows the time large, and turns on Show lock. It only enters Perform mode if the lock could be turned on. The status bar shows a screens count, with how many are quiet or lost. Tap **Exit perform mode** to get the controls back; the lock stays on.
+- In Perform mode, during the count-in the Start button becomes **Cancel** (or press Esc), which puts the timer back where Start was pressed and stops the QLab cue firing, even under Show lock. Cancel ignores taps for its first second, so a double tap on Start can't undo it, and disappears half a second before zero (from then on it would be too late to stop the cue reliably).
 - Space = Start, Esc = Pause. Reset needs two clicks. Show lock disables Pause too: only Start works while it is on.
 - Start begins a 5s count-in (or whatever start time is set): every screen washes amber, pulsing on each second with the count on the clock face, and flashes green at zero, so whoever didn't press Start notices it.
 
@@ -28,8 +29,9 @@ npm run qlab -- --cue 2 --passcode 1234 --server https://timer.ligetiquartet.com
 
 - In QLab, Workspace Settings → Network → OSC Access: give a passcode **View** and **Control** access (or allow them without a passcode and leave out `--passcode`).
 - Check the bridge prints `QLab ready: /cue/2 "<cue name>"` and `Connected to timer`, and that "QLab bridge (cue 2)" shows in the Screens panel. Keep its Terminal window open (and the Mac awake: `caffeinate -dims` alongside, or run it on the `npm run show` Mac).
-- It fires only when the timer crosses zero while running, i.e. after a count-in. Starting from 0 or later, or pausing before zero, doesn't fire it. It logs how precisely it fired.
-- Rehearse it: start from the count-in and listen for the cue on the green flash.
+- It fires only when the timer crosses zero while running, i.e. after a count-in. Starting from 0 or later, or pausing or cancelling before zero, doesn't fire it. It logs how precisely it fired.
+- Cancel only reaches the cue through the bridge's connection to the timer: if the bridge has lost the timer when you cancel, it still fires the cue it was armed for. Check the bridge shows as connected (green) in the Screens panel before Start.
+- Rehearse it: start from the count-in and listen for the cue on the green flash; then start and Cancel, and check the cue doesn't fire.
 - If QLab is on another Mac, add `--qlab <ip>` (port 53000 by default).
 
 ## Stage screens

@@ -448,7 +448,7 @@ export function createBridge({ server, cue, cueId, workspace, qlabHost = "127.0.
     const target = zeroAt(state);
     const key = state && `${state.startRealTimestamp}:${state.accumulatedVirtualMs}:${state.speed}`;
     if (target == null || key === firedKey) {
-      if (armedFor != null) log("Disarmed (timer paused, reset or past zero)");
+      if (armedFor != null) log("Disarmed (timer paused, cancelled, reset or past zero)");
       disarm();
       return;
     }
