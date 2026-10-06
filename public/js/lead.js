@@ -102,6 +102,7 @@ let lastState = null;
 // Declared early: restored state is applied during connect()
 let resetConfirmTimer = null;
 const CANCEL_ARM_MS = 1000;
+const CANCEL_CUTOFF_MS = 500; // Matches the server
 let performButtonMode = "start"; // "start" | "cancel" | "hidden"
 let cancelArmedAt = 0;
 
@@ -264,11 +265,12 @@ btnStart.addEventListener("click", () => command({ type: "start" }));
 btnStop.addEventListener("click", () => command({ type: "stop" }));
 
 // Perform mode's one button: Start while stopped; Cancel during the count-in
-// (back to where Start was pressed, even under Show lock); hidden from zero,
-// since Perform mode has no Pause. Cancel ignores taps for its first second,
-// so a double tap on Start can't undo it.
+// (back to where Start was pressed, even under Show lock, so a QLab cue armed
+// for zero doesn't fire); hidden from CANCEL_CUTOFF_MS before zero, when the
+// server refuses Cancel, since Perform mode has no Pause. Cancel ignores taps
+// for its first second, so a double tap on Start can't undo it.
 function inCountIn() {
-  return running && lastState?.startedFromMs != null && getElapsedMs().virtual < 0;
+  return running && lastState?.startedFromMs != null && -getElapsedMs().real >= CANCEL_CUTOFF_MS;
 }
 
 function updatePerformButton() {

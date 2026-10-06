@@ -376,15 +376,17 @@ export function defineProtocolTests(it) {
       lead.close();
     });
 
-    it("is refused once the timer has reached zero", async ({ backend }) => {
+    it.for([
+      { at: "in the last 500ms before zero", from: -400 },
+      { at: "after zero", from: 0 },
+    ])("is refused $at", async ({ from }, { backend }) => {
       const lead = await connectLead(backend);
-      lead.send({ type: "setTime", virtualMs: -50 });
+      lead.send({ type: "setTime", virtualMs: from });
       await lead.next("state");
       lead.send({ type: "start" });
       await lead.next("state");
-      await sleep(100);
       lead.send({ type: "cancel" });
-      expect(await lead.next("error")).toEqual({ type: "error", message: "Count-in is over" });
+      expect(await lead.next("error")).toEqual({ type: "error", message: "Too close to zero to cancel" });
       await lead.flush();
       expect(lead.pending("state")).toEqual([]);
       lead.close();

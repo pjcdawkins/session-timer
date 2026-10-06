@@ -252,6 +252,20 @@ describe.concurrent("bridge", () => {
     await waitFor(() => qlab.starts().length > 0);
   });
 
+  it("doesn't fire if the count-in is cancelled", async ({ bridgeFor, lead, qlab, logs }) => {
+    bridgeFor();
+    await ready(logs);
+    lead.send({ type: "setTime", virtualMs: -1000 });
+    await lead.flush();
+    lead.send({ type: "start" });
+    await waitFor(() => logs.some((l) => l.startsWith("Armed")));
+    lead.send({ type: "cancel" });
+    await lead.next((m) => m.type === "state" && !m.state.running);
+    await sleep(1200);
+    expect(qlab.starts()).toHaveLength(0);
+    expect(logs.some((l) => l.startsWith("Disarmed"))).toBe(true);
+  });
+
   it("doesn't fire when started at or after zero", async ({ bridgeFor, lead, qlab, logs }) => {
     bridgeFor();
     await ready(logs);

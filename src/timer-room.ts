@@ -83,6 +83,10 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+// Cancel is refused this close to zero (in real time), so that the QLab
+// bridge hears about an accepted cancel before it would fire the cue
+const CANCEL_CUTOFF_MS = 500;
+
 // Commands refused while the show lock is on (it applies to every lead screen)
 const LOCKED_COMMANDS = new Set(["stop", "reset", "setSpeed", "setTime", "setHighlight"]);
 
@@ -273,11 +277,11 @@ export class TimerRoom extends DurableObject<Env> {
         break;
 
       // Undo Start during the count-in (allowed under Show lock): back to
-      // where Start was pressed. Refused once the timer has reached zero.
+      // where Start was pressed. Refused from CANCEL_CUTOFF_MS before zero.
       case "cancel":
         if (this.state.running && this.state.startedFromMs !== null) {
-          if (this.currentVirtualMs() >= 0) {
-            ws.send(JSON.stringify({ type: "error", message: "Count-in is over" }));
+          if (-this.currentVirtualMs() / this.state.speed < CANCEL_CUTOFF_MS) {
+            ws.send(JSON.stringify({ type: "error", message: "Too close to zero to cancel" }));
             return;
           }
           this.state.running = false;
