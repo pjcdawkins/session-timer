@@ -1,5 +1,5 @@
 import { connect, send, getClientId } from "./websocket-client.js";
-import { updateState, initAnalogClock, initDisplay, startRenderLoop } from "./timer-display.js";
+import { updateState, getElapsedMs, initAnalogClock, initDisplay, startRenderLoop } from "./timer-display.js";
 import { initWakeLock } from "./wake-lock.js";
 import { renderSVG } from "./vendor/uqr.js";
 import { initFullscreen } from "./fullscreen.js";
@@ -99,7 +99,11 @@ function sendAuth(credential, fromForm = false) {
 let qrLoaded = false;
 let running = false;
 let lastState = null;
-let resetConfirmTimer = null; // Declared early: restored state is applied during connect()
+// Declared early: restored state is applied during connect()
+let resetConfirmTimer = null;
+const CANCEL_ARM_MS = 1000;
+let performButtonMode = "start"; // "start" | "cancel" | "hidden"
+let cancelArmedAt = 0;
 
 async function loadQr() {
   if (qrLoaded) return;
@@ -132,7 +136,7 @@ connect({
 
     running = state.running;
     btnStart.disabled = state.running;
-    btnPerformStart.classList.toggle("hidden", state.running);
+    updatePerformButton();
 
     setTimeControls.classList.toggle("hidden", state.running);
 
@@ -257,8 +261,39 @@ function command(msg) {
 
 // Transport
 btnStart.addEventListener("click", () => command({ type: "start" }));
-btnPerformStart.addEventListener("click", () => command({ type: "start" }));
 btnStop.addEventListener("click", () => command({ type: "stop" }));
+
+// Perform mode's one button: Start while stopped; Cancel during the count-in
+// (back to where Start was pressed, even under Show lock); hidden from zero,
+// since Perform mode has no Pause. Cancel ignores taps for its first second,
+// so a double tap on Start can't undo it.
+function inCountIn() {
+  return running && lastState?.startedFromMs != null && getElapsedMs().virtual < 0;
+}
+
+function updatePerformButton() {
+  const mode = !running ? "start" : inCountIn() ? "cancel" : "hidden";
+  if (mode !== performButtonMode) {
+    performButtonMode = mode;
+    btnPerformStart.textContent = mode === "cancel" ? "Cancel" : "Start";
+    btnPerformStart.title = mode === "cancel" ? "Esc: back to where Start was pressed" : "Space";
+    btnPerformStart.classList.toggle("cancel", mode === "cancel");
+    btnPerformStart.classList.toggle("hidden", mode === "hidden");
+    if (mode === "cancel") cancelArmedAt = performance.now() + CANCEL_ARM_MS;
+  }
+  const disarmed = mode === "cancel" && performance.now() < cancelArmedAt;
+  if (btnPerformStart.disabled !== disarmed) btnPerformStart.disabled = disarmed;
+}
+
+(function performButtonLoop() {
+  updatePerformButton();
+  requestAnimationFrame(performButtonLoop);
+})();
+
+btnPerformStart.addEventListener("click", () => {
+  if (performButtonMode === "start") command({ type: "start" });
+  else if (performButtonMode === "cancel" && !btnPerformStart.disabled) command({ type: "cancel" });
+});
 
 // Reset needs a second click within 3s
 function cancelResetConfirm() {
@@ -279,7 +314,8 @@ btnReset.addEventListener("click", () => {
 });
 
 // Keyboard: Space = Start (never toggles, so a double press can't pause),
-// Esc = Pause (except in Perform mode or under Show lock)
+// Esc = Pause (except under Show lock); in Perform mode, Esc = Cancel during
+// the count-in and does nothing after zero
 document.addEventListener("keydown", (e) => {
   if (!authenticated || e.repeat) return;
   if (e.target.closest("input, textarea, select")) return;
@@ -289,7 +325,9 @@ document.addEventListener("keydown", (e) => {
   } else if (e.code === "Escape") {
     if (!qrModal.classList.contains("hidden")) return;
     e.preventDefault();
-    if (running && !lastState?.locked && !document.body.classList.contains("perform")) {
+    if (document.body.classList.contains("perform")) {
+      if (performButtonMode === "cancel" && !btnPerformStart.disabled) command({ type: "cancel" });
+    } else if (running && !lastState?.locked) {
       command({ type: "stop" });
     }
   }

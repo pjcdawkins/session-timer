@@ -1410,7 +1410,7 @@ body:not(.perform) .perform-only {
   cursor: pointer;
 }
 
-/* Only while stopped: lead.js hides it when running */
+/* Start while stopped, Cancel during the count-in; lead.js hides it from zero */
 #btn-perform-start {
   min-width: 9rem;
   padding: 0.8rem 1.6rem;
@@ -1434,6 +1434,24 @@ body:not(.perform) .perform-only {
 
 #btn-perform-start:active {
   transform: scale(0.96);
+}
+
+#btn-perform-start.cancel {
+  background: transparent;
+  border-color: var(--red-dim);
+  color: var(--red);
+}
+
+#btn-perform-start.cancel:hover:not(:disabled) {
+  background: var(--hover-tint);
+  box-shadow: 0 0 20px var(--red-glow);
+}
+
+/* Cancel's first second, so a double tap on Start doesn't undo it */
+#btn-perform-start.cancel:disabled {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
 }
 
 #btn-perform-exit:hover {
